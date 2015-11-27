@@ -1,28 +1,32 @@
 package main
 
 import (
-	"fmt"
-	"os"
-	"log"
-	"regexp"
+	// "github.com/cheggaaa/pb"
+	"github.com/amimof/logger"
 	"io/ioutil"
+	"os"
+	"regexp"
+	"strconv"
+	// "time"
 )
 
 var prog string = os.Args[0]
-//var mroot string = "/Users/amir/Documents/Media/Movies"
-//var sroot string = "/Users/amir/Documents/Media/Series"
-//var target string = "/Users/amir/Transmission"
 var mroot string = os.Args[1]
 var sroot string = os.Args[2]
 var target string = os.Args[3]
-var spattern []string = []string{"(.*?)S(\\d{1,2})E(\\d{2})(.*)", "(.*?)s(\\d{1,2})e(\\d{2})(.*)", "(.*?)\\[?(\\d{1,2})x(\\d{2})\\]?(.*)", "(.*?)Season.?(\\d{1,2}).*?Episode.?(\\d{1,2})(.*)"}
-var mpattern []string = []string{"(.*?)\\((17[0-9][0-9]|180[0-9]|181[0-9]|18[2-9]\\d|19\\d\\d|2\\d{3}|30[0-3]\\d|304[0-8])\\)(.*)", "(.*?)\\[(17[0-9][0-9]|180[0-9]|181[0-9]|18[2-9]\\d|19\\d\\d|2\\d{3}|30[0-3]\\d|304[0-8])\\](.*)", "(.*?)\\{(17[0-9][0-9]|180[0-9]|181[0-9]|18[2-9]\\d|19\\d\\d|2\\d{3}|30[0-3]\\d|304[0-8])\\}(.*)", "(.*?)(17[0-9][0-9]|180[0-9]|181[0-9]|18[2-9]\\d|19\\d\\d|2\\d{3}|30[0-3]\\d|304[0-8])(.*)", "(.*?)(\\d{3,4}p)(.*)"}
+var extensions string = "\\.(mkv|MKV|mp4|MP4|m4p|M4P|m4v|M4V|mpg|MPG|mpeg|MPEG|mp2|MP2|mpe|MPE|mpv|MPV|3gp|3GP|nsv|NSV|f4v|F4V|f4p|F4P|f4a|F4A|f4b|F4P|vob|VOB|avi|AVI|mov|MOV|wmv|WMV|asd|ASD|flv|FLV|ogv|OGV|ogg|OGG|qt|QT|yuv|YUV|rm|RM|rmvb|RMVB)"
+var spattern []string = []string{"(.*?)S(\\d{1,2})E(\\d{2})(.*)"+extensions,
+	"(.*?)s(\\d{1,2})e(\\d{2})(.*)"+extensions,
+	"(.*?)\\[?(\\d{1,2})x(\\d{2})\\]?(.*)"+extensions,
+	"(.*?)Season.?(\\d{1,2}).*?Episode.?(\\d{1,2})(.*)"+extensions}
+var mpattern []string = []string{"(.*?)\\((17[0-9][0-9]|180[0-9]|181[0-9]|18[2-9]\\d|19\\d\\d|2\\d{3}|30[0-3]\\d|304[0-8])\\)(.*)"+extensions,
+	"(.*?)\\[(17[0-9][0-9]|180[0-9]|181[0-9]|18[2-9]\\d|19\\d\\d|2\\d{3}|30[0-3]\\d|304[0-8])\\](.*)"+extensions,
+	"(.*?)\\{(17[0-9][0-9]|180[0-9]|181[0-9]|18[2-9]\\d|19\\d\\d|2\\d{3}|30[0-3]\\d|304[0-8])\\}(.*)"+extensions,
+	"(.*?)(17[0-9][0-9]|180[0-9]|181[0-9]|18[2-9]\\d|19\\d\\d|2\\d{3}|30[0-3]\\d|304[0-8])(.*)"+extensions,
+	"(.*?)(\\d{3,4}p)(.*)"}
+var log *logger.Logger = logger.SetupNew("MAIN")
 
-type Pattern struct {
-	Data []string
-}
-
-func exists(path string) (bool) {
+func exists(path string) bool {
 	_, err := os.Stat(path)
 	if err == nil {
 		return true
@@ -33,7 +37,7 @@ func exists(path string) (bool) {
 	return true
 }
 
-func isFile(path string) (bool) {
+func isFile(path string) bool {
 	file, err := os.Stat(path)
 	if err == nil && file.IsDir() != true {
 		return true
@@ -42,74 +46,82 @@ func isFile(path string) (bool) {
 }
 
 func usage() string {
-	return prog + " <movies> <series> <target>"
+	return *(&prog) + " <movies> <series> <target> <loglevel>"
 }
 
 func isMovie(filename string) (bool, error) {
-	log.Println("Checking if " + filename + " is a movie")
+	log.Debug("Checking if " + filename + " is a movie")
 	for index, element := range mpattern {
 		r, err := regexp.Compile(element)
 		if err == nil {
 			match := r.MatchString(filename)
 			if match {
-				log.Println("Found match", index, match)
+				log.Info("Found match", index, match)
 				return true, nil
 			}
 		} else {
 			return false, err
 		}
 	}
-	log.Println("No matches found")
+	log.Info("No matches found")
 	return false, nil
 }
 
 func main() {
 
+	// Sets the loglevel.
+	// First we need to read from args and convert it to an int
+	loglevel, err := strconv.Atoi(os.Args[4])
+	if err != nil {
+		log.Error("Unexpected arguments")
+	}
+	log.Level.SetLevel(loglevel)
+
+
 	// Print usage to the user
-	fmt.Println("Usage: " + usage())
+	//log.Info("Usage: " + usage())
 
 	// Check if movies root exists
 	if !exists(mroot) {
-		log.Fatalln("Does not exist", mroot)
+		log.Error("Does not exist", mroot)
 		os.Exit(1)
 	}
 	// Check if series root exists
 	if !exists(sroot) {
-		log.Fatalln("Does not exist", sroot)
+		log.Error("Does not exist", sroot)
 		os.Exit(1)
 	}
 	// Check if movies root is a directory
 	if isFile(mroot) {
-		log.Fatalln("Is not a directory", mroot)
+		log.Error("Is not a directory", mroot)
 		os.Exit(1)
 	}
 	// Check if series root is a directory
 	if isFile(sroot) {
-		log.Fatalln("Is not a directory", sroot)
+		log.Error("Is not a directory", sroot)
 		os.Exit(1)
 	}
 	// Check if target exists
 	if !exists(target) {
-		log.Fatalln("Does not exist", target)
+		log.Error("Does not exist", target)
 		os.Exit(1)
 	}
 	// Check if target is a directory
 	if isFile(target) {
-		log.Fatalln("Is not a directory", target)
+		log.Error("Is not a directory", target)
 		os.Exit(1)
 	}
 
 	// Main
 	f, err := ioutil.ReadDir(target)
 	for i, file := range f {
-		log.Println(file.Name(), err, i)
+		if isM, errM := isMovie(file.Name()); isM {
+			if errM == nil {
+				log.Info("Is a movie", file.Name(), i, err)
+			} else {
+				log.Error("Error", errM)
+			}
+		}
 	}
-
-
-
-	// ismovie, err := isMovie(movie)
-	// if ismovie {
-	// 	log.Println(ismovie, err)
-	// }
 
 }
