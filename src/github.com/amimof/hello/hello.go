@@ -26,6 +26,7 @@ var mpattern []string = []string{"(.*?)\\((17[0-9][0-9]|180[0-9]|181[0-9]|18[2-9
 	"(.*?)(\\d{3,4}p)(.*)"}
 var log *logger.Logger = logger.SetupNew("MAIN")
 
+// Returns true if path exists
 func exists(path string) bool {
 	_, err := os.Stat(path)
 	if err == nil {
@@ -37,6 +38,7 @@ func exists(path string) bool {
 	return true
 }
 
+// Return true if path is a file
 func isFile(path string) bool {
 	file, err := os.Stat(path)
 	if err == nil && file.IsDir() != true {
@@ -45,10 +47,12 @@ func isFile(path string) bool {
 	return false
 }
 
+// Prints program usage to the user
 func usage() string {
 	return *(&prog) + " <movies> <series> <target> <loglevel>"
 }
 
+// Checks wether a given filename is considered to be a movie
 func isMovie(filename string) (bool, error) {
 	log.Debug("Checking if " + filename + " is a movie")
 	for index, element := range mpattern {
@@ -56,14 +60,14 @@ func isMovie(filename string) (bool, error) {
 		if err == nil {
 			match := r.MatchString(filename)
 			if match {
-				log.Info("Found match", index, match)
+				log.Debug(index, match)
 				return true, nil
 			}
 		} else {
 			return false, err
 		}
 	}
-	log.Info("No matches found")
+	log.Debug(filename, "did not match")
 	return false, nil
 }
 
@@ -76,10 +80,6 @@ func main() {
 		log.Error("Unexpected arguments")
 	}
 	log.Level.SetLevel(loglevel)
-
-
-	// Print usage to the user
-	//log.Info("Usage: " + usage())
 
 	// Check if movies root exists
 	if !exists(mroot) {
@@ -113,15 +113,19 @@ func main() {
 	}
 
 	// Main
+	var mmatches []string
 	f, err := ioutil.ReadDir(target)
+	log.Debug("Looking in", target)
 	for i, file := range f {
 		if isM, errM := isMovie(file.Name()); isM {
 			if errM == nil {
-				log.Info("Is a movie", file.Name(), i, err)
+				log.Debug("Is a movie", file.Name(), i, err)
+				mmatches = append(mmatches, file.Name())
 			} else {
 				log.Error("Error", errM)
 			}
 		}
 	}
+	log.Info("Movies matched in dir is", len(mmatches))
 
 }
