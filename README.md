@@ -12,16 +12,17 @@ Below example will overwrite any already existing files and folders (-o)
 
 Other available command line options are
 ```
-./scanner -h
 Usage of ./scanner:
   -c    Prompt for confirm when overwriting existing files/folders
   -m string
-        Directory to your movies. Current directory (.) by default (default ".")
-  -o    Set to true to overwrite existing files/folders when copying
+        Directory to your movies. (default ".")
+  -o    Overwrite existing files/folders when copying
   -s string
-        Directory to your series. Current directory (.) by default (default ".")
+        Directory to your series. (default ".")
   -t string
-        Target directory. Typically your Downloads folder. Current directory (.) by default (default ".")
+        Target directory. Typically your Downloads folder. (default ".")
+  -u string
+        String representation of unit to use when calculating file sizes. Choices are k, m, g and t (default "g")
   -v int
-        Log level. 3=DEBUG, 2=WARN, 1=INFO, 0=DEBUG
+        Log level. 3=DEBUG, 2=WARN, 1=INFO, 0=DEBUG. (default "0")
 ```
