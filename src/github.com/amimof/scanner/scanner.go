@@ -112,12 +112,12 @@ func confirmCopy(msg string) bool {
 func main() {
 
 	// Read arguments
-	flag.StringVar(&mroot, "m", ".", "Directory to your movies. Current directory (.) by default")
-	flag.StringVar(&sroot, "s", ".", "Directory to your series. Current directory (.) by default")
-	flag.StringVar(&target, "t", ".", "Target directory. Typically your Downloads folder. Current directory (.) by default")
-	flag.BoolVar(&overwrite, "o", false, "Set to true to overwrite existing files/folders when copying")
+	flag.StringVar(&mroot, "m", ".", "Directory to your movies.")
+	flag.StringVar(&sroot, "s", ".", "Directory to your series.")
+	flag.StringVar(&target, "t", ".", "Target directory. Typically your Downloads folder.")
+	flag.BoolVar(&overwrite, "o", false, "Overwrite existing files/folders when copying")
 	flag.BoolVar(&confirm, "c", false, "Prompt for confirm when overwriting existing files/folders")
-	flag.IntVar(&loglevel, "v", 0, "Log level. 3=DEBUG, 2=WARN, 1=INFO, 0=DEBUG")
+	flag.IntVar(&loglevel, "v", 0, "Log level. 3=DEBUG, 2=WARN, 1=INFO, 0=DEBUG. (default \"0\")")
 	flag.Parse()
 
 	// Sets the loglevel.
