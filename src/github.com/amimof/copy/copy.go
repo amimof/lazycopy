@@ -95,11 +95,6 @@ func CopyFile(src, dst string, ow bool) (int64, error) {
 		log.Error("Couldn't open", src, err)
 		return 0, err
 	}
-  if ow == false {
-    if !os.IsNotExist(err) {
-      return 0, err
-    }
-  }
 	defer s.Close()
 
 	// Stat source
@@ -110,6 +105,15 @@ func CopyFile(src, dst string, ow bool) (int64, error) {
 	}
 	sourceSize := srcStat.Size()
 	source = s
+
+  // Check if dst exists
+  d, err := os.Open(dst)
+  if !os.IsNotExist(err) {
+    if ow == false {
+      return 0, err
+    }
+  }
+  defer d.Close()
 
 	// Create dest
 	dest, err := os.Create(dst)
