@@ -8,14 +8,15 @@ package main
 */
 
 import (
-	// "github.com/cheggaaa/pb"
 	"github.com/amimof/logger"
+	"github.com/amimof/copy"
 	"io/ioutil"
 	"os"
 	"regexp"
 	"flag"
 	"path"
-	// "time"
+	"fmt"
+	"strings"
 )
 
 var (
@@ -23,10 +24,14 @@ var (
 	mroot string
 	sroot string
 	target string
+	overwrite bool
+	confirm bool
 	loglevel int
 )
 
-var extensions string = "\\.(mkv|MKV|mp4|MP4|m4p|M4P|m4v|M4V|mpg|MPG|mpeg|MPEG|mp2|MP2|mpe|MPE|mpv|MPV|3gp|3GP|nsv|NSV|f4v|F4V|f4p|F4P|f4a|F4A|f4b|F4P|vob|VOB|avi|AVI|mov|MOV|wmv|WMV|asd|ASD|flv|FLV|ogv|OGV|ogg|OGG|qt|QT|yuv|YUV|rm|RM|rmvb|RMVB)"
+// Extensions in regexp disabled atm since it prevents us from detecting folders
+// var extensions string = "\\.(mkv|MKV|mp4|MP4|m4p|M4P|m4v|M4V|mpg|MPG|mpeg|MPEG|mp2|MP2|mpe|MPE|mpv|MPV|3gp|3GP|nsv|NSV|f4v|F4V|f4p|F4P|f4a|F4A|f4b|F4P|vob|VOB|avi|AVI|mov|MOV|wmv|WMV|asd|ASD|flv|FLV|ogv|OGV|ogg|OGG|qt|QT|yuv|YUV|rm|RM|rmvb|RMVB)"
+var extensions string = ""
 var spattern []string = []string{"(.*?)S(\\d{1,2})E(\\d{2})(.*)"+extensions,
 	"(.*?)s(\\d{1,2})e(\\d{2})(.*)"+extensions,
 	"(.*?)\\[?(\\d{1,2})x(\\d{2})\\]?(.*)"+extensions,
@@ -77,13 +82,42 @@ func isMedia(filename string, pattern []string) (bool, error) {
 	return false, nil
 }
 
+// Confirm prompt. Accept y/n from user. Returns true or false
+func confirmCopy(msg string) bool {
+
+	fmt.Println(msg)
+
+	var response string
+	_, err := fmt.Scanln(&response)
+	if err != nil {
+		log.Error(err)
+	}
+
+	// Lowercase response. Remove whitespace
+	response = strings.ToLower(response)
+	response = strings.Trim(response, " ")
+
+	r := string(response[0])
+	if r == "y" {
+		return true
+	} else if r == "n" {
+		return false
+	} else {
+		fmt.Println("Please type yes or no")
+		return confirmCopy(msg)
+	}
+}
+
+// Main loop
 func main() {
 
 	// Read arguments
 	flag.StringVar(&mroot, "m", ".", "Directory to your movies. Current directory (.) by default")
 	flag.StringVar(&sroot, "s", ".", "Directory to your series. Current directory (.) by default")
 	flag.StringVar(&target, "t", ".", "Target directory. Typically your Downloads folder. Current directory (.) by default")
-	flag.IntVar(&loglevel, "v", 3, "Log level. 3=DEBUG, 2=WARN, 1=INFO, 0=DEBUG")
+	flag.BoolVar(&overwrite, "o", false, "Set to true to overwrite existing files/folders when copying")
+	flag.BoolVar(&confirm, "c", false, "Prompt for confirm when overwriting existing files/folders")
+	flag.IntVar(&loglevel, "v", 0, "Log level. 3=DEBUG, 2=WARN, 1=INFO, 0=DEBUG")
 	flag.Parse()
 
 	// Sets the loglevel.
@@ -127,18 +161,46 @@ func main() {
 	var smatches []string
 	f, err := ioutil.ReadDir(target)
 	log.Debug("Looking in", target)
+	var totalWritten int64
 	for i, file := range f {
 		log.Debug("Checking", file.Name())
 		if isM, errM := isMedia(file.Name(), mpattern); isM {
 			if errM == nil {
+
 				log.Debug("Movie found", file.Name(), i, err)
 				mmatches = append(mmatches, file.Name())
 				srcf := path.Join(target, file.Name())
-				log.Info("Copying", srcf)
+
+				if confirm == true {
+					overwrite = confirmCopy("Overwrite? (y/n) " + file.Name())
+				}
+
+				var written int64
+				if isFile(srcf) {
+					dstf := path.Join(mroot, file.Name())
+					log.Debug("Is file", dstf)
+					written, err = copy.CopyFile(srcf, path.Join(mroot, file.Name()), overwrite)
+					if err != nil {
+						log.Error("Can't copy", file.Name(), err)
+					}
+					totalWritten = totalWritten + written
+
+				} else {
+					dstf := path.Join(mroot, file.Name())
+					log.Debug("Is dir", dstf)
+					written, err = copy.CopyDir(srcf, path.Join(mroot, file.Name()), overwrite)
+					if err != nil {
+						log.Error("Can't copy", file.Name(), err)
+					}
+					totalWritten = totalWritten + written
+
+				}
+
 			} else {
 				log.Error("Error", errM)
 			}
 		}
+
 		if isS, errS := isMedia(file.Name(), spattern); isS {
 			if errS == nil {
 				log.Debug("Serie found", file.Name(), i, err)
@@ -148,6 +210,8 @@ func main() {
 			}
 		}
 	}
+
+	fmt.Println("Copied", totalWritten, "bytes")
 
 	log.Info("Movies matched in dir is", len(mmatches))
 	log.Info("Series matched in dir is", len(smatches))
