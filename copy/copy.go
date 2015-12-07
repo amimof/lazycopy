@@ -1,4 +1,4 @@
-package copy
+package lazycopy
 
 /**
 *
@@ -8,7 +8,7 @@ package copy
 */
 
 import (
-  "github.com/amimof/logger"
+  logger "github.com/amimof/lazycopy/logger"
   "github.com/cheggaaa/pb"
   "io/ioutil"
   "io"

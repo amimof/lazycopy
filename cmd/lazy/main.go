@@ -8,8 +8,8 @@ package main
 */
 
 import (
-	"github.com/amimof/logger"
-	"github.com/amimof/copy"
+	copy "github.com/amimof/lazycopy/copy"
+	logger "github.com/amimof/lazycopy/logger"
 	"io/ioutil"
 	"os"
 	"regexp"
