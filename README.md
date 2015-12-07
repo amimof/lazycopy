@@ -12,7 +12,7 @@ Below example will overwrite any already existing files and folders (-o)
 
 Other available command line options are
 ```
-Usage of ./scanner:
+Usage of ./lazy:
   -c    Prompt for confirm when overwriting existing files/folders
   -m string
         Directory to your movies. (default ".")
