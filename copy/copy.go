@@ -37,9 +37,6 @@ func CopyDir(src, dst string, ow bool) (int64, error) {
 
 	// Ensure that dst does not already exist
 	d, err := os.Open(dst)
-  if err != nil {
-    log.Error("Couldn't open", dst, err)
-  }
   if ow == false {
     if !os.IsNotExist(err) {
       return 0, err
