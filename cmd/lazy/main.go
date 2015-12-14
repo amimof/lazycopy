@@ -162,10 +162,10 @@ func confirmCopy(msg string) bool {
 }
 
 // Copy file from src to dst. if list is true then content of src is not copied
-func copyFile(src, dst string, overwrite, list bool) (int64, error) {
+func copyFile(src, dst string, overwrite bool) (int64, error) {
 	var written int64
 	if !listmode {
-		written, err = copy.CopyFile(src, dst, overwrite)
+		written, err := copy.CopyFile(src, dst, overwrite)
 		if err != nil {
 			return written, err
 		}
@@ -174,10 +174,10 @@ func copyFile(src, dst string, overwrite, list bool) (int64, error) {
 }
 
 // Copy file from src to dst. if list is true then content of src is not copied
-func copyDir(src, dst string, overwrite, list bool) (int64, error) {
+func copyDir(src, dst string, overwrite bool) (int64, error) {
 	var written int64
 	if !listmode {
-		written, err = copy.CopyDir(src, dst, overwrite)
+		written, err := copy.CopyDir(src, dst, overwrite)
 		if err != nil {
 			return written, err
 		}
@@ -194,7 +194,7 @@ func main() {
 	flag.StringVar(&target, "t", ".", "Target directory. Typically your Downloads folder")
 	flag.BoolVar(&overwrite, "o", false, "Overwrite existing files/folders when copying")
 	flag.BoolVar(&confirm, "c", false, "Prompt for confirm when overwriting existing files/folders")
-	flag.BoolVar(&listmode, "S", false, "List found media. Don't perform any copy")
+	flag.BoolVar(&listmode, "l", false, "List found media. Don't perform any copy")
 	flag.IntVar(&loglevel, "v", 0, "Log level. 3=DEBUG, 2=WARN, 1=INFO, 0=DEBUG. (default \"0\")")
 	flag.StringVar(&unit, "u", "g", "String representation of unit to use when calculating file sizes. Choices are k, m, g and t")
 	flag.Parse()
@@ -240,6 +240,7 @@ func main() {
 	var smatches []string
 	f, err := ioutil.ReadDir(target)
 	log.Debug("Overwrite is set to", overwrite)
+	log.Debug("List mode is set to", listmode)
 	log.Debug("Looking in", target)
 	var totalWritten int64
 	for i, file := range f {
@@ -249,6 +250,9 @@ func main() {
 		movie, errM := isMovie(file.Name(), mpattern)
 		if movie != nil {
 			if errM == nil {
+				if listmode {
+					fmt.Println("Matches movie:", file.Name())
+				}
 				log.Debug("==== MOVIE START ====")
 				log.Debug("Movie", movie.title, movie.year, movie.filename, i, err)
 				mmatches = append(mmatches, file.Name())
@@ -283,6 +287,9 @@ func main() {
 		serie, errS := isSerie(file.Name(), spattern)
 		if serie != nil {
 			if errS == nil {
+				if listmode {
+					fmt.Println("Matches serie:", file.Name())
+				}
 				log.Debug("==== MOVIE START ====")
 				log.Debug("Serie", serie.title, serie.season, serie.episode, serie.filename)
 				var written int64
