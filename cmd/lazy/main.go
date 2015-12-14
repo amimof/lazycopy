@@ -27,6 +27,7 @@ var (
 	unit string
 	overwrite bool
 	confirm bool
+	listmode bool
 	loglevel int
 )
 
@@ -160,15 +161,40 @@ func confirmCopy(msg string) bool {
 	}
 }
 
+// Copy file from src to dst. if list is true then content of src is not copied
+func copyFile(src, dst string, overwrite, list bool) (int64, error) {
+	var written int64
+	if !listmode {
+		written, err = copy.CopyFile(src, dst, overwrite)
+		if err != nil {
+			return written, err
+		}
+	}
+	return written, nil
+}
+
+// Copy file from src to dst. if list is true then content of src is not copied
+func copyDir(src, dst string, overwrite, list bool) (int64, error) {
+	var written int64
+	if !listmode {
+		written, err = copy.CopyDir(src, dst, overwrite)
+		if err != nil {
+			return written, err
+		}
+	}
+	return written, nil
+}
+
 // Main loop
 func main() {
 
 	// Read arguments
-	flag.StringVar(&mroot, "m", ".", "Directory to your movies.")
-	flag.StringVar(&sroot, "s", ".", "Directory to your series.")
-	flag.StringVar(&target, "t", ".", "Target directory. Typically your Downloads folder.")
+	flag.StringVar(&mroot, "m", ".", "Directory to your movies")
+	flag.StringVar(&sroot, "s", ".", "Directory to your series")
+	flag.StringVar(&target, "t", ".", "Target directory. Typically your Downloads folder")
 	flag.BoolVar(&overwrite, "o", false, "Overwrite existing files/folders when copying")
 	flag.BoolVar(&confirm, "c", false, "Prompt for confirm when overwriting existing files/folders")
+	flag.BoolVar(&listmode, "S", false, "List found media. Don't perform any copy")
 	flag.IntVar(&loglevel, "v", 0, "Log level. 3=DEBUG, 2=WARN, 1=INFO, 0=DEBUG. (default \"0\")")
 	flag.StringVar(&unit, "u", "g", "String representation of unit to use when calculating file sizes. Choices are k, m, g and t")
 	flag.Parse()
@@ -235,7 +261,7 @@ func main() {
 					dstf := path.Join(mroot, file.Name())
 					log.Debug("Dest is", dstf)
 					log.Debug("Is file", dstf)
-					written, err = copy.CopyFile(srcf, path.Join(mroot, file.Name()), overwrite)
+					written, err = copyFile(srcf, path.Join(mroot, file.Name()), overwrite)
 					if err != nil {
 						log.Error("Can't copy", file.Name(), err)
 					}
@@ -243,7 +269,7 @@ func main() {
 				} else {
 					dstf := path.Join(mroot, file.Name())
 					log.Debug("Is dir", dstf)
-					written, err = copy.CopyDir(srcf, path.Join(mroot, file.Name()), overwrite)
+					written, err = copyDir(srcf, path.Join(mroot, file.Name()), overwrite)
 					if err != nil {
 						log.Error("Can't copy", file.Name(), err)
 					}
@@ -277,14 +303,14 @@ func main() {
 				log.Debug("Dest is", dstf)
 				if isFile(srcf) {
 					log.Debug("Is file", srcf)
-					written, err = copy.CopyFile(srcf, dstf, overwrite)
+					written, err = copyFile(srcf, dstf, overwrite)
 					if err != nil {
 						log.Error("Can't copy", file.Name(), err)
 					}
 					totalWritten = totalWritten + written
 				} else {
 					log.Debug("Is dir", srcf)
-					written, err = copy.CopyDir(srcf, dstf, overwrite)
+					written, err = copyDir(srcf, dstf, overwrite)
 					if err != nil {
 						log.Error("Can't copy", file.Name(), err)
 					}
