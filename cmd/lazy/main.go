@@ -1,4 +1,4 @@
-package main
+package cmd
 
 /**
 *
@@ -21,14 +21,14 @@ import (
 
 var (
 	prog string
+	source string
 	mroot string
 	sroot string
-	target string
 	unit string
 	overwrite bool
 	confirm bool
-	listmode bool
 	loglevel int
+	verify bool
 )
 
 type Movie struct {
@@ -89,7 +89,7 @@ func isMovie(filename string, pattern []string) (*Movie, error) {
 			match := r.MatchString(filename)
 			if match {
 				result := r.FindStringSubmatch(filename)
-				movie := &Movie{strings.Trim(result[1], "."), strings.Trim(result[2], "."), filename}
+				movie := &Movie{strings.Replace(strings.Trim(strings.Trim(result[1], "."), " "), ".", " ", -1), strings.Trim(result[2], "."), filename}
 				return movie, nil
 			}
 		} else {
@@ -107,8 +107,9 @@ func isSerie(filename string, pattern []string) (*Serie, error) {
 			match := r.MatchString(filename)
 			if match {
 				result := r.FindStringSubmatch(filename)
-				serie := &Serie{strings.Trim(result[1], "."), strings.Trim(result[2], "."), strings.Trim(result[3], "."), filename}
-				return serie, nil
+				// Fix this so that dots are replaced with space in in the title.
+				serie := &Serie{strings.Replace(strings.Trim(strings.Trim(result[1], "."), " "), ".", " ", -1), strings.Trim(result[2], "."), strings.Trim(result[3], "."), filename}
+				return serie, nil				
 			}
 		} else {
 			return nil, err
@@ -118,19 +119,19 @@ func isSerie(filename string, pattern []string) (*Serie, error) {
 }
 
 // Converts file size from bytes to kb, mb, gb or tb
-func convertFileSize(size int64, unit string) int64 {
-	var result int64
+func convertFileSize(size int64, unit string) float64 {
+	var result float64 = 0
 	switch unit {
 		case "k":
-			result = size / 1024
+			result = float64(size) / 1024
 		case "m":
-			result = (size / 1024) / 1024
+			result = (float64(size) / 1024) / 1024
 		case "g":
-			result = ((size / 1024) / 1024) / 1024
+			result = ((float64(size) / 1024) / 1024) / 1024
 		case "t":
-			result = (((size / 1024) / 1024) / 1024) / 1024
+			result = (((float64(size) / 1024) / 1024) / 1024) / 1024
 		default:
-			result = ((size / 1024) / 1024) / 1024
+			result = ((float64(size) / 1024) / 1024) / 1024
 	}
 	return result
 }
@@ -161,42 +162,18 @@ func confirmCopy(msg string) bool {
 	}
 }
 
-// Copy file from src to dst. if list is true then content of src is not copied
-func copyFile(src, dst string, overwrite bool) (int64, error) {
-	var written int64
-	if !listmode {
-		written, err := copy.CopyFile(src, dst, overwrite)
-		if err != nil {
-			return written, err
-		}
-	}
-	return written, nil
-}
-
-// Copy file from src to dst. if list is true then content of src is not copied
-func copyDir(src, dst string, overwrite bool) (int64, error) {
-	var written int64
-	if !listmode {
-		written, err := copy.CopyDir(src, dst, overwrite)
-		if err != nil {
-			return written, err
-		}
-	}
-	return written, nil
-}
-
 // Main loop
-func main() {
+func Execute() {
 
 	// Read arguments
-	flag.StringVar(&mroot, "m", ".", "Directory to your movies")
-	flag.StringVar(&sroot, "s", ".", "Directory to your series")
-	flag.StringVar(&target, "t", ".", "Target directory. Typically your Downloads folder")
+	flag.StringVar(&source, "S", ".", "Directories in which to look for media delimited by comma")
+	flag.StringVar(&mroot, "m", ".", "Directory to your movies.")
+	flag.StringVar(&sroot, "s", ".", "Directory to your series.")
 	flag.BoolVar(&overwrite, "o", false, "Overwrite existing files/folders when copying")
 	flag.BoolVar(&confirm, "c", false, "Prompt for confirm when overwriting existing files/folders")
-	flag.BoolVar(&listmode, "l", false, "List found media. Don't perform any copy")
 	flag.IntVar(&loglevel, "v", 0, "Log level. 3=DEBUG, 2=WARN, 1=INFO, 0=DEBUG. (default \"0\")")
 	flag.StringVar(&unit, "u", "g", "String representation of unit to use when calculating file sizes. Choices are k, m, g and t")
+	flag.BoolVar(&verify, "V", false, "Verify, do not actually copy.")
 	flag.Parse()
 
 	// Sets the loglevel.
@@ -206,130 +183,147 @@ func main() {
 
 	// Check if movies root exists
 	if !exists(mroot) {
-		log.Error("Does not exist", mroot)
+		log.Errorf("Does not exist '%s'\n", mroot)
 		os.Exit(1)
 	}
 	// Check if series root exists
 	if !exists(sroot) {
-		log.Error("Does not exist", sroot)
+		log.Errorf("Does not exist '%s'\n", sroot)
 		os.Exit(1)
 	}
 	// Check if movies root is a directory
 	if isFile(mroot) {
-		log.Error("Is not a directory", mroot)
+		log.Errorf("Is not a directory '%s'\n", mroot)
 		os.Exit(1)
 	}
 	// Check if series root is a directory
 	if isFile(sroot) {
-		log.Error("Is not a directory", sroot)
+		log.Errorf("Is not a directory '%s'\n", sroot)
 		os.Exit(1)
 	}
-	// Check if target exists
-	if !exists(target) {
-		log.Error("Does not exist", target)
-		os.Exit(1)
-	}
-	// Check if target is a directory
-	if isFile(target) {
-		log.Error("Is not a directory", target)
-		os.Exit(1)
+
+	sources := strings.Split(source, ",")
+
+	for i, s := range sources {
+		log.Debugf("[%b] - %s \n", i, s)
+	
+		// Check if source exists
+		if !exists(s) {
+			log.Error("Does not exist", s)
+			os.Exit(1)
+		}
+		// Check if movies root is a directory
+		if isFile(s) {
+			log.Error("Is not a directory", s)
+			os.Exit(1)
+		}
 	}
 
 	// Main
 	var mmatches []string
 	var smatches []string
-	f, err := ioutil.ReadDir(target)
-	log.Debug("Overwrite is set to", overwrite)
-	log.Debug("List mode is set to", listmode)
-	log.Debug("Looking in", target)
 	var totalWritten int64
-	for i, file := range f {
-		log.Debug("Checking", file.Name())
 
-		// Check for movies
-		movie, errM := isMovie(file.Name(), mpattern)
-		if movie != nil {
-			if errM == nil {
-				if listmode {
-					fmt.Println("Matches movie:", file.Name())
-				}
-				log.Debug("==== MOVIE START ====")
-				log.Debug("Movie", movie.title, movie.year, movie.filename, i, err)
-				mmatches = append(mmatches, file.Name())
-				srcf := path.Join(target, file.Name())
-				if confirm == true {
-					overwrite = confirmCopy("Overwrite? (y/n) " + file.Name())
-				}
-				var written int64
-				if isFile(srcf) {
-					dstf := path.Join(mroot, file.Name())
-					log.Debug("Dest is", dstf)
-					log.Debug("Is file", dstf)
-					written, err = copyFile(srcf, path.Join(mroot, file.Name()), overwrite)
-					if err != nil {
-						log.Error("Can't copy", file.Name(), err)
-					}
-					totalWritten = totalWritten + written
-				} else {
-					dstf := path.Join(mroot, file.Name())
-					log.Debug("Is dir", dstf)
-					written, err = copyDir(srcf, path.Join(mroot, file.Name()), overwrite)
-					if err != nil {
-						log.Error("Can't copy", file.Name(), err)
-					}
-					totalWritten = totalWritten + written
-				}
-			}
-			log.Debug("==== MOVIE END ====")
-		}
+	log.Debug("Overwrite is set to", overwrite)
 
-		// Check for series
-		serie, errS := isSerie(file.Name(), spattern)
-		if serie != nil {
-			if errS == nil {
-				if listmode {
-					fmt.Println("Matches serie:", file.Name())
-				}
-				log.Debug("==== MOVIE START ====")
-				log.Debug("Serie", serie.title, serie.season, serie.episode, serie.filename)
-				var written int64
-				smatches = append(smatches, file.Name())
-				if confirm == true {
-					overwrite = confirmCopy("Overwrite? (y/n) " + file.Name())
-				}
-				srcf := path.Join(target, file.Name())
-				dstFolder := path.Join(sroot, serie.title, "Season"+serie.season)
-				if !exists(dstFolder) {
-						log.Debug("Dest does not exist, creating", dstFolder)
-						err = os.MkdirAll(dstFolder, 0700)
+	for i, src := range sources {
+
+		f, err := ioutil.ReadDir(src)
+		log.Debugf("[%d] Source is '%s'\n", i, src)
+		var index int64 = 0
+
+		for j, file := range f {
+			log.Debugf("Checking '%s' \n", file.Name())
+
+			// Check for movies
+			movie, errM := isMovie(file.Name(), mpattern)
+			if movie != nil {
+				if errM == nil {
+					log.Debugf("[%d] ==== MOVIE START ==== \n", j)
+					log.Debugf("[%d] Movie. Title: '%s', Year: '%s', Filename: '%s', \n", j, movie.title, movie.year, movie.filename)
+					mmatches = append(mmatches, file.Name())
+					srcf := path.Join(src, file.Name())
+					if confirm == true {
+						overwrite = confirmCopy("Copy? (y/n) '" + file.Name() + "'")
+					}
+
+					// Don't do anything if verify flag is true
+					if !verify {
+						var written int64
+						dstf := path.Join(mroot, file.Name())
+						log.Debugf("[%d] Dest is '%s' \n", j, dstf)
+
+						// Start the copy
+						written, err = copy.Copy(srcf, path.Join(mroot, file.Name()), overwrite)
 						if err != nil {
-							log.Error("Couldn't create", dstFolder, err)
+							log.Errorf("[%b] Can't copy '%s'. %s \n", j, file.Name(), err)
 						}
-				}
-				dstf := path.Join(dstFolder, file.Name())
-				log.Debug("Dest is", dstf)
-				if isFile(srcf) {
-					log.Debug("Is file", srcf)
-					written, err = copyFile(srcf, dstf, overwrite)
-					if err != nil {
-						log.Error("Can't copy", file.Name(), err)
+
+						totalWritten = totalWritten + written
+
 					}
-					totalWritten = totalWritten + written
-				} else {
-					log.Debug("Is dir", srcf)
-					written, err = copyDir(srcf, dstf, overwrite)
-					if err != nil {
-						log.Error("Can't copy", file.Name(), err)
-					}
-					totalWritten = totalWritten + written
 				}
+				log.Debugf("[%d] ==== MOVIE END ==== \n", j)
 			}
-			log.Debug("==== SERIE END ====")
+
+			// Check for series
+			serie, errS := isSerie(file.Name(), spattern)
+			if serie != nil {
+				if errS == nil {
+					log.Debugf("[%d] ==== SERIE START ==== \n", j)
+					log.Debugf("[%d] Serie. Title: '%s', Season: '%s', Episode: '%s', Filename: '%s' \n", j, serie.title, serie.season, serie.episode, serie.filename)
+					var written int64
+					smatches = append(smatches, file.Name())
+					if confirm == true {
+						overwrite = confirmCopy("Copy? (y/n) '" + file.Name() + "'")
+					}
+
+					// Don't do anything if verify flag is true
+					if !verify {
+						srcf := path.Join(src, file.Name())
+
+						// Stat source so that we can perserve permissions when creating the directories if necessary
+						s, err := os.Stat(path.Dir(srcf))
+						if err != nil {
+							log.Errorf("[%d] Couldn't stat. '%s' \n", j, err)
+						}
+
+						// Create serie folder and season folders resursively
+						dstFolder := path.Join(sroot, serie.title, "Season "+serie.season)
+						if !exists(dstFolder) {
+							log.Debugf("[%s] Dest does not exist, creating '%s' \n", j, dstFolder)
+							err = os.MkdirAll(dstFolder, s.Mode())
+							if err != nil {
+								log.Errorf("[%d] Couldn't create '%s'. %s \n", j, dstFolder, err)
+							}
+						}
+
+						// Start copying
+						dstf := path.Join(dstFolder, file.Name())
+						log.Debugf("[%d] Dest is '%s' \n", j, dstf)
+						written, err = copy.Copy(srcf, dstf, overwrite)
+						if err != nil {
+							log.Errorf("[%d] Can't copy '%s'. %s", j, file.Name(), err)
+						}
+
+						totalWritten = totalWritten + written
+
+					}	
+				}
+				log.Debugf("[%d] ==== SERIE END ==== \n", j)
+			}
+			index++
 		}
 	}
 
-	log.Debug("Movies matched in dir is", len(mmatches))
-	log.Debug("Series matched in dir is", len(smatches))
-	fmt.Println("Copied", convertFileSize(totalWritten, unit), unit)
+	for _, arg := range flag.Args() {
+		fmt.Println(arg)
+	}
+
+	fmt.Println(totalWritten)
+
+	fmt.Println("Movies matched:", len(mmatches))
+	fmt.Println("Series matched:", len(smatches))
+	fmt.Printf("Copied %.2f%s\n", convertFileSize(totalWritten, unit), unit)
 
 }
