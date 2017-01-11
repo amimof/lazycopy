@@ -34,28 +34,36 @@ var (
 type Movie struct {
 	title string
 	year string
-	filename string
+	regexp string
+	file os.FileInfo
 }
 
 type Serie struct {
 	title string
 	season string
 	episode string
-	filename string
+	regexp string
+	file os.FileInfo
 }
 
-// Extensions in regexp disabled atm since it prevents us from detecting folders
-// var extensions string = "\\.(mkv|MKV|mp4|MP4|m4p|M4P|m4v|M4V|mpg|MPG|mpeg|MPEG|mp2|MP2|mpe|MPE|mpv|MPV|3gp|3GP|nsv|NSV|f4v|F4V|f4p|F4P|f4a|F4A|f4b|F4P|vob|VOB|avi|AVI|mov|MOV|wmv|WMV|asd|ASD|flv|FLV|ogv|OGV|ogg|OGG|qt|QT|yuv|YUV|rm|RM|rmvb|RMVB)"
-var extensions string = ""
-var spattern []string = []string{"(.*?)S(\\d{1,2})E(\\d{2})(.*)"+extensions,
-	"(.*?)s(\\d{1,2})e(\\d{2})(.*)"+extensions,
-	"(.*?)\\[?(\\d{1,2})x(\\d{2})\\]?(.*)"+extensions,
-	"(.*?)Season.?(\\d{1,2}).*?Episode.?(\\d{1,2})(.*)"+extensions}
-var mpattern []string = []string{"(.*?)\\((17[0-9][0-9]|180[0-9]|181[0-9]|18[2-9]\\d|19\\d\\d|2\\d{3}|30[0-3]\\d|304[0-8])\\)(.*)"+extensions,
-	"(.*?)\\[(17[0-9][0-9]|180[0-9]|181[0-9]|18[2-9]\\d|19\\d\\d|2\\d{3}|30[0-3]\\d|304[0-8])\\](.*)"+extensions,
-	"(.*?)\\{(17[0-9][0-9]|180[0-9]|181[0-9]|18[2-9]\\d|19\\d\\d|2\\d{3}|30[0-3]\\d|304[0-8])\\}(.*)"+extensions,
-	"(.*?)(17[0-9][0-9]|180[0-9]|181[0-9]|18[2-9]\\d|19\\d\\d|2\\d{3}|30[0-3]\\d|304[0-8])(.*)"+extensions,
-	"(.*?)(\\d{3,4}p)(.*)"}
+// List of file extensions. Otherwise we might get wierd matches when files contain numbers, such as log files.
+// var extensions []string = []string{
+// 	"mkv","MKV","mp4","MP4","m4p","M4P","m4v","M4V","mpg","MPG","mpeg","MPEG","mp2","MP2","mpe","MPE","mpv","MPV","3gp","3GP","nsv","NSV","f4v","F4V","f4p","F4P","f4a","F4A","f4b","F4P","vob","VOB","avi","AVI","mov","MOV","wmv","WMV","asd","ASD","flv","FLV","ogv","OGV","ogg","OGG","qt","QT","yuv","YUV","rm","RM","rmvb","RMVB",
+// }
+var extensions string = "\\.(mkv|MKV|mp4|MP4|m4p|M4P|m4v|M4V|mpg|MPG|mpeg|MPEG|mp2|MP2|mpe|MPE|mpv|MPV|3gp|3GP|nsv|NSV|f4v|F4V|f4p|F4P|f4a|F4A|f4b|F4P|vob|VOB|avi|AVI|mov|MOV|wmv|WMV|asd|ASD|flv|FLV|ogv|OGV|ogg|OGG|qt|QT|yuv|YUV|rm|RM|rmvb|RMVB)"
+// Expressions to use when evaluating series
+var spattern []string = []string{"(.*?)S(\\d{1,2})E(\\d{2})(.*)",
+	"(.*?)s(\\d{1,2})e(\\d{2})(.*)",
+	"(.*?)\\[?(\\d{1,2})x(\\d{2})\\]?(.*)",
+	"(.*?)Season.?(\\d{1,2}).*?Episode.?(\\d{1,2})(.*)",
+}
+// Expressions to use when evaluating movies
+var mpattern []string = []string{"(.*?)\\((17[0-9][0-9]|180[0-9]|181[0-9]|18[2-9]\\d|19\\d\\d|2\\d{3}|30[0-3]\\d|304[0-8])\\)(.*)",
+	"(.*?)\\[(17[0-9][0-9]|180[0-9]|181[0-9]|18[2-9]\\d|19\\d\\d|2\\d{3}|30[0-3]\\d|304[0-8])\\](.*)",
+	"(.*?)\\{(17[0-9][0-9]|180[0-9]|181[0-9]|18[2-9]\\d|19\\d\\d|2\\d{3}|30[0-3]\\d|304[0-8])\\}(.*)",
+	"(.*?)(17[0-9][0-9]|180[0-9]|181[0-9]|18[2-9]\\d|19\\d\\d|2\\d{3}|30[0-3]\\d|304[0-8])(.*)",
+	"(.*?)(\\d{3,4}p)(.*)",
+}
 var log *logger.Logger = logger.SetupNew("MAIN")
 
 // Returns true if path exists
@@ -79,17 +87,20 @@ func isFile(path string) bool {
 	return false
 }
 
+
 // Checks wether a given filename is considered to be a movie or series
 // based on the specified regexp patterns
-func isMovie(filename string, pattern []string) (*Movie, error) {
-	for index, element := range pattern {
-		_ = index
+func isMovie(file os.FileInfo, pattern []string) (*Movie, error) {
+	for _, element := range pattern {
+		if !file.IsDir() {
+			element = element+extensions
+		}
 		r, err := regexp.Compile(element)
 		if err == nil {
-			match := r.MatchString(filename)
+			match := r.MatchString(file.Name())
 			if match {
-				result := r.FindStringSubmatch(filename)
-				movie := &Movie{strings.Replace(strings.Trim(strings.Trim(result[1], "."), " "), ".", " ", -1), strings.Trim(result[2], "."), filename}
+				result := r.FindStringSubmatch(file.Name())
+				movie := &Movie{strings.Replace(strings.Trim(strings.Trim(result[1], "."), " "), ".", " ", -1), strings.Trim(result[2], "."), element, file}
 				return movie, nil
 			}
 		} else {
@@ -99,16 +110,17 @@ func isMovie(filename string, pattern []string) (*Movie, error) {
 	return nil, nil
 }
 
-func isSerie(filename string, pattern []string) (*Serie, error) {
-	for index, element := range pattern {
-		_ = index
+func isSerie(file os.FileInfo, pattern []string) (*Serie, error) {
+	for _, element := range pattern {
+		if !file.IsDir() {
+			element = element+extensions
+		}
 		r, err := regexp.Compile(element)
 		if err == nil {
-			match := r.MatchString(filename)
+			match := r.MatchString(file.Name())
 			if match {
-				result := r.FindStringSubmatch(filename)
-				// Fix this so that dots are replaced with space in in the title.
-				serie := &Serie{strings.Replace(strings.Trim(strings.Trim(result[1], "."), " "), ".", " ", -1), strings.Trim(result[2], "."), strings.Trim(result[3], "."), filename}
+				result := r.FindStringSubmatch(file.Name())
+				serie := &Serie{strings.Replace(strings.Trim(strings.Trim(result[1], "."), " "), ".", " ", -1), strings.Trim(result[2], "."), strings.Trim(result[3], "."), element, file}
 				return serie, nil				
 			}
 		} else {
@@ -236,11 +248,12 @@ func Execute() {
 			log.Debugf("Checking '%s' \n", file.Name())
 
 			// Check for movies
-			movie, errM := isMovie(file.Name(), mpattern)
+			movie, errM := isMovie(file, mpattern)
 			if movie != nil {
 				if errM == nil {
 					log.Debugf("[%d] ==== MOVIE START ==== \n", j)
-					log.Debugf("[%d] Movie. Title: '%s', Year: '%s', Filename: '%s', \n", j, movie.title, movie.year, movie.filename)
+					log.Debugf("[%d] Movie. Title: '%s', Year: '%s', Filename: '%s'\n", j, movie.title, movie.year, movie.file.Name())
+					log.Debugf("[%d] Movie matched regexp: '%s'\n", j, movie.regexp)
 					mmatches = append(mmatches, file.Name())
 					srcf := path.Join(src, file.Name())
 					if confirm == true {
@@ -267,11 +280,12 @@ func Execute() {
 			}
 
 			// Check for series
-			serie, errS := isSerie(file.Name(), spattern)
+			serie, errS := isSerie(file, spattern)
 			if serie != nil {
 				if errS == nil {
-					log.Debugf("[%d] ==== SERIE START ==== \n", j)
-					log.Debugf("[%d] Serie. Title: '%s', Season: '%s', Episode: '%s', Filename: '%s' \n", j, serie.title, serie.season, serie.episode, serie.filename)
+					log.Debugf("[%d] ==== SERIE START ====\n", j)
+					log.Debugf("[%d] Serie. Title: '%s', Season: '%s', Episode: '%s', Filename: '%s'\n", j, serie.title, serie.season, serie.episode, serie.file.Name())
+					log.Debugf("[%d] Serie matched regexp: '%s'\n", j, serie.regexp)
 					var written int64
 					smatches = append(smatches, file.Name())
 					if confirm == true {
@@ -315,12 +329,6 @@ func Execute() {
 			index++
 		}
 	}
-
-	for _, arg := range flag.Args() {
-		fmt.Println(arg)
-	}
-
-	fmt.Println(totalWritten)
 
 	fmt.Println("Movies matched:", len(mmatches))
 	fmt.Println("Series matched:", len(smatches))

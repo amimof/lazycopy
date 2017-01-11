@@ -12,8 +12,14 @@ import (
   "io/ioutil"
   "io"
   "path"
+  "path/filepath"
   "os"
   "time"
+)
+
+var (
+	bar *pb.ProgressBar
+	written int64
 )
 
 /*
@@ -29,19 +35,67 @@ func Copy(src, dst string, ow bool) (int64, error) {
 		return 0, err
 	}
 
-	var written int64
+	var writtenTotal int64
 
 	// Check if src is a dir
 	if s.IsDir() {
-		written, err = copyDir(src, dst, ow)
+
+		// Calculate total directory size before copying so that we can pass it to the progress bar
+		dirSize, err := calculateSize(src)
+		if err != nil {
+			return 0, err
+		}
+
+		// Create progress bar and init some defaults
+		bar = pb.New64(dirSize)
+		initBar(src)
+
+		// Start progress bar and start copying
+		bar.Start()
+		writtenTotal, err = copyDir(src, dst, ow)
+		
 	}
 
 	// Check if src is a file
 	if !s.IsDir() {
-		written, err = copyFile(src, dst, ow)
+
+		// Create progress bar and init some defaults
+		bar = pb.New64(s.Size())
+		initBar(src)
+
+		// Start progress bar and start  copying
+		bar.Start()
+		writtenTotal, err = copyFile(src, dst, ow)
+		
 	}
 
-	return written, err
+	bar.Finish()
+
+	return writtenTotal, err
+
+}
+
+// Customize the bar. This function is mainly so that we don't have to write the same code twise.
+// Don't like the fact that this function takes the argument src. Might need some work.
+func initBar(src string) {
+	bar.SetUnits(pb.U_BYTES)
+	bar.SetRefreshRate(time.Millisecond*10)
+	bar.Prefix(truncate(path.Base(src), 10, true)+": ")	
+	bar.Format("<.- >")
+	bar.ShowSpeed =  true
+}
+
+// Calculate total size of a directory
+func calculateSize(src string) (int64, error) {
+
+	var size int64
+	err := filepath.Walk(src, func(_ string, info os.FileInfo, err error) error {
+		if !info.IsDir() {
+			size += info.Size()
+		}
+		return err
+	})
+	return size, err
 
 }
 
@@ -74,7 +128,7 @@ func copyDir(src, dst string, ow bool) (int64, error) {
 		return 0, err
 	}
 
-	var written int64
+	//var written int64
 	entries, err := ioutil.ReadDir(src)
 
 	if err != nil {
@@ -87,15 +141,17 @@ func copyDir(src, dst string, ow bool) (int64, error) {
 			dfp := path.Join(dst, entry.Name())
 
 			if entry.IsDir() {
-				written, err = copyDir(sfp, dfp, ow)
+				w, err := copyDir(sfp, dfp, ow)
 				if err != nil {
 					return 0, err
 				}
+				written += w
 			} else {
-				written, err = copyFile(sfp, dfp, ow)
+				w, err := copyFile(sfp, dfp, ow)
 				if err != nil {
-					return 0, nil
+					return 0, err
 				}
+				written += w
 			}
 		}
 	}
@@ -108,20 +164,11 @@ func copyDir(src, dst string, ow bool) (int64, error) {
 func copyFile(src, dst string, ow bool) (int64, error) {
 
 	// Create source
-	var source io.Reader
 	s, err := os.Open(src)
 	if err != nil {
 		return 0, err
 	}
 	defer s.Close()
-
-	// Stat source
-	srcStat, err := s.Stat()
-	if err != nil {
-		return 0, err
-	}
-	sourceSize := srcStat.Size()
-	source = s
 
 	// Check if dst exists
 	d, err := os.Open(dst)
@@ -139,20 +186,14 @@ func copyFile(src, dst string, ow bool) (int64, error) {
 	}
 	defer dest.Close()
 
-	// Create the progress bar
-	bar := pb.New(int(sourceSize)).SetUnits(pb.U_BYTES).SetRefreshRate(time.Millisecond*10).Prefix(truncate(path.Base(src), 10, true)+": ")
-	bar.Format("<.->")
-	bar.ShowSpeed = true
-	bar.Start()
-
 	// Copy
 	writer := io.MultiWriter(dest, bar)
-	written, err := io.Copy(writer, source)
+	written, err := io.Copy(writer, s)
+
 	if err != nil {
 		return 0, err
 	}
 
-	bar.Finish()
 	return written, nil
 }
 
