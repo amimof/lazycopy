@@ -8,8 +8,8 @@ package cmd
 */
 
 import (
-	copy "github.com/amimof/lazycopy/copy"
-	logger "github.com/amimof/lazycopy/logger"
+	"github.com/amimof/lazycopy/fileutils"
+	"github.com/amimof/loglevel-go"
 	"io/ioutil"
 	"os"
 	"regexp"
@@ -17,6 +17,7 @@ import (
 	"path"
 	"fmt"
 	"strings"
+	"bufio"
 )
 
 var (
@@ -27,7 +28,7 @@ var (
 	unit string
 	overwrite bool
 	confirm bool
-	loglevel int
+	level int
 	verify bool
 )
 
@@ -64,7 +65,7 @@ var mpattern []string = []string{"(.*?)\\((17[0-9][0-9]|180[0-9]|181[0-9]|18[2-9
 	"(.*?)(17[0-9][0-9]|180[0-9]|181[0-9]|18[2-9]\\d|19\\d\\d|2\\d{3}|30[0-3]\\d|304[0-8])(.*)",
 	"(.*?)(\\d{3,4}p)(.*)",
 }
-var log *logger.Logger = logger.SetupNew("MAIN")
+var log *loglevel.Logger = loglevel.SetupNew("MAIN")
 
 // Returns true if path exists
 func exists(path string) bool {
@@ -148,34 +149,47 @@ func convertFileSize(size int64, unit string) float64 {
 	return result
 }
 
-// Confirm prompt. Accept y/n from user. Returns true or false
-func confirmCopy(msg string) bool {
+// Prompts the user for comfirmation by askig a yes/no question. The question can be 
+// provided as msg. (yes/no) [default] will be appended to the msg. 
+func confirmCopy(msg string, def bool) bool {
 
-	fmt.Println(msg)
+	var response string = ""
+	var defaultChoice = "no"
 
-	var response string
-	_, err := fmt.Scanln(&response)
-	if err != nil {
-		log.Error(err)
+	if def {
+		defaultChoice = "yes"
+	}
+	fmt.Printf("%s (yes/no) [%s] ", msg, defaultChoice)
+
+	scanner := bufio.NewScanner(os.Stdin)
+	ok := scanner .Scan()
+
+	if ok {
+		
+		response = strings.ToLower(strings.Trim(scanner.Text(), " "))
+
+		if response == "y" || response == "yes" {
+			return true
+		} else if response == "n" || response == "no" {
+			return false
+		} else if response == "" && def {
+			return true
+		} else {
+			fmt.Println("Please type (y)es or (n)o.")
+			return confirmCopy(msg, def)
+		}
+
 	}
 
-	// Lowercase response. Remove whitespace
-	response = strings.ToLower(response)
-	response = strings.Trim(response, " ")
+	return false
 
-	r := string(response[0])
-	if r == "y" {
-		return true
-	} else if r == "n" {
-		return false
-	} else {
-		fmt.Println("Please type yes or no")
-		return confirmCopy(msg)
-	}
 }
 
 // Main loop
 func Execute() {
+
+	// Arguments and parameters to the program feels un-natural. Perhaps find a 
+	// library that can handle the arguments for us. Also, thinking of renaming 'series' to 'tv-shows'
 
 	// Read arguments
 	flag.StringVar(&source, "S", ".", "Directories in which to look for media delimited by comma")
@@ -183,15 +197,15 @@ func Execute() {
 	flag.StringVar(&sroot, "s", ".", "Directory to your series.")
 	flag.BoolVar(&overwrite, "o", false, "Overwrite existing files/folders when copying")
 	flag.BoolVar(&confirm, "c", false, "Prompt for confirm when overwriting existing files/folders")
-	flag.IntVar(&loglevel, "v", 0, "Log level. 3=DEBUG, 2=WARN, 1=INFO, 0=DEBUG. (default \"0\")")
+	flag.IntVar(&level, "l", 0, "Log level. 3=DEBUG, 2=WARN, 1=INFO, 0=ERROR. (default \"0\")")
 	flag.StringVar(&unit, "u", "g", "String representation of unit to use when calculating file sizes. Choices are k, m, g and t")
-	flag.BoolVar(&verify, "V", false, "Verify, do not actually copy.")
+	flag.BoolVar(&verify, "v", false, "Verify, do not actually copy.")
 	flag.Parse()
 
 	// Sets the loglevel.
 	// First we need to read from args and convert it to an int
-	log.Level.SetLevel(loglevel)
-	log.Debug("Log level is", loglevel)
+	log.Level.SetLevel(level)
+	log.Debug("Log level is", level)
 
 	// Check if movies root exists
 	if !exists(mroot) {
@@ -257,7 +271,7 @@ func Execute() {
 					mmatches = append(mmatches, file.Name())
 					srcf := path.Join(src, file.Name())
 					if confirm == true {
-						overwrite = confirmCopy("Copy? (y/n) '" + file.Name() + "'")
+						overwrite = confirmCopy("Copy '"+file.Name()+"'?", true)
 					}
 
 					// Don't do anything if verify flag is true
@@ -267,7 +281,7 @@ func Execute() {
 						log.Debugf("[%d] Dest is '%s' \n", j, dstf)
 
 						// Start the copy
-						written, err = copy.Copy(srcf, path.Join(mroot, file.Name()), overwrite)
+						written, err = fileutils.Copy(srcf, path.Join(mroot, file.Name()), overwrite)
 						if err != nil {
 							log.Errorf("[%b] Can't copy '%s'. %s \n", j, file.Name(), err)
 						}
@@ -289,7 +303,7 @@ func Execute() {
 					var written int64
 					smatches = append(smatches, file.Name())
 					if confirm == true {
-						overwrite = confirmCopy("Copy? (y/n) '" + file.Name() + "'")
+						overwrite = confirmCopy("Copy '"+file.Name()+"'?", true)
 					}
 
 					// Don't do anything if verify flag is true
@@ -315,7 +329,7 @@ func Execute() {
 						// Start copying
 						dstf := path.Join(dstFolder, file.Name())
 						log.Debugf("[%d] Dest is '%s' \n", j, dstf)
-						written, err = copy.Copy(srcf, dstf, overwrite)
+						written, err = fileutils.Copy(srcf, dstf, overwrite)
 						if err != nil {
 							log.Errorf("[%d] Can't copy '%s'. %s", j, file.Name(), err)
 						}

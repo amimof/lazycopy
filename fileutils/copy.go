@@ -1,4 +1,4 @@
-package lazycopy
+package fileutils
 
 /**
 *
@@ -80,8 +80,8 @@ func Copy(src, dst string, ow bool) (int64, error) {
 func initBar(src string) {
 	bar.SetUnits(pb.U_BYTES)
 	bar.SetRefreshRate(time.Millisecond*10)
-	bar.Prefix(truncate(path.Base(src), 10, true)+": ")	
-	bar.Format("<.- >")
+	bar.Prefix(truncate(path.Base(src), 40, true)+": ")	
+	bar.Format("[-> ]")
 	bar.ShowSpeed =  true
 }
 
