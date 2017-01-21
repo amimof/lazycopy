@@ -197,7 +197,7 @@ func Execute() {
 	flag.StringVar(&sroot, "s", ".", "Directory to your series.")
 	flag.BoolVar(&overwrite, "o", false, "Overwrite existing files/folders when copying")
 	flag.BoolVar(&confirm, "c", false, "Prompt for confirm when overwriting existing files/folders")
-	flag.IntVar(&level, "l", 0, "Log level. 3=DEBUG, 2=WARN, 1=INFO, 0=ERROR. (default \"0\")")
+	flag.IntVar(&level, "l", 1, "Log level. 3=DEBUG, 2=INFO, 1=WARN, 0=ERROR. (default \"0\")")
 	flag.StringVar(&unit, "u", "g", "String representation of unit to use when calculating file sizes. Choices are k, m, g and t")
 	flag.BoolVar(&verify, "v", false, "Verify, do not actually copy.")
 	flag.Parse()
@@ -205,27 +205,24 @@ func Execute() {
 	// Sets the loglevel.
 	// First we need to read from args and convert it to an int
 	log.Level.SetLevel(level)
+	log.PrintTime = false
 	log.Debug("Log level is", level)
 
 	// Check if movies root exists
 	if !exists(mroot) {
 		log.Errorf("Does not exist '%s'\n", mroot)
-		os.Exit(1)
 	}
 	// Check if series root exists
 	if !exists(sroot) {
 		log.Errorf("Does not exist '%s'\n", sroot)
-		os.Exit(1)
 	}
 	// Check if movies root is a directory
 	if isFile(mroot) {
 		log.Errorf("Is not a directory '%s'\n", mroot)
-		os.Exit(1)
 	}
 	// Check if series root is a directory
 	if isFile(sroot) {
 		log.Errorf("Is not a directory '%s'\n", sroot)
-		os.Exit(1)
 	}
 
 	sources := strings.Split(source, ",")
@@ -236,12 +233,10 @@ func Execute() {
 		// Check if source exists
 		if !exists(s) {
 			log.Error("Does not exist", s)
-			os.Exit(1)
 		}
 		// Check if movies root is a directory
 		if isFile(s) {
 			log.Error("Is not a directory", s)
-			os.Exit(1)
 		}
 	}
 
