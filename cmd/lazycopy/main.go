@@ -65,7 +65,7 @@ var mpattern []string = []string{"(.*?)\\((17[0-9][0-9]|180[0-9]|181[0-9]|18[2-9
 	"(.*?)(17[0-9][0-9]|180[0-9]|181[0-9]|18[2-9]\\d|19\\d\\d|2\\d{3}|30[0-3]\\d|304[0-8])(.*)",
 	"(.*?)(\\d{3,4}p)(.*)",
 }
-var log *loglevel.Logger = loglevel.SetupNew("MAIN")
+var log *loglevel.Logger = loglevel.New()
 
 // Returns true if path exists
 func exists(path string) bool {
