@@ -15,7 +15,6 @@ import (
 	"regexp"
 	"flag"
 	"path"
-	"fmt"
 	"strings"
 	"bufio"
 )
@@ -159,7 +158,7 @@ func confirmCopy(msg string, def bool) bool {
 	if def {
 		defaultChoice = "yes"
 	}
-	fmt.Printf("%s (yes/no) [%s] ", msg, defaultChoice)
+	log.Printf("%s (yes/no) [%s] ", msg, defaultChoice)
 
 	scanner := bufio.NewScanner(os.Stdin)
 	ok := scanner .Scan()
@@ -175,7 +174,7 @@ func confirmCopy(msg string, def bool) bool {
 		} else if response == "" && def {
 			return true
 		} else {
-			fmt.Println("Please type (y)es or (n)o.")
+			log.Println("Please type (y)es or (n)o.")
 			return confirmCopy(msg, def)
 		}
 
@@ -204,39 +203,39 @@ func Execute() {
 
 	// Sets the loglevel.
 	// First we need to read from args and convert it to an int
-	log.Level.SetLevel(level)
-	log.PrintTime = false
-	log.Debug("Log level is", level)
+	log.SetLevel(level)
+	log.PrintTime = true
+	log.Debugf("Log level is '%d'", level)
 
 	// Check if movies root exists
 	if !exists(mroot) {
-		log.Errorf("Does not exist '%s'\n", mroot)
+		log.Errorf("Does not exist '%s'", mroot)
 	}
 	// Check if series root exists
 	if !exists(sroot) {
-		log.Errorf("Does not exist '%s'\n", sroot)
+		log.Errorf("Does not exist '%s'", sroot)
 	}
 	// Check if movies root is a directory
 	if isFile(mroot) {
-		log.Errorf("Is not a directory '%s'\n", mroot)
+		log.Errorf("Is not a directory '%s'", mroot)
 	}
 	// Check if series root is a directory
 	if isFile(sroot) {
-		log.Errorf("Is not a directory '%s'\n", sroot)
+		log.Errorf("Is not a directory '%s'", sroot)
 	}
 
 	sources := strings.Split(source, ",")
 
 	for i, s := range sources {
-		log.Debugf("[%b] - %s \n", i, s)
+		log.Debugf("[%b] - %s", i, s)
 	
 		// Check if source exists
 		if !exists(s) {
-			log.Error("Does not exist", s)
+			log.Errorf("Does not exist '%s'", s)
 		}
 		// Check if movies root is a directory
 		if isFile(s) {
-			log.Error("Is not a directory", s)
+			log.Errorf("Is not a directory '%s'", s)
 		}
 	}
 
@@ -245,24 +244,24 @@ func Execute() {
 	var smatches []string
 	var totalWritten int64
 
-	log.Debug("Overwrite is set to", overwrite)
+	log.Debugf("Overwrite is set to '%t'", overwrite)
 
 	for i, src := range sources {
 
 		f, err := ioutil.ReadDir(src)
-		log.Debugf("[%d] Source is '%s'\n", i, src)
+		log.Debugf("[%d] Source is '%s'", i, src)
 		var index int64 = 0
 
 		for j, file := range f {
-			log.Debugf("Checking '%s' \n", file.Name())
+			log.Debugf("Checking '%s'", file.Name())
 
 			// Check for movies
 			movie, errM := isMovie(file, mpattern)
 			if movie != nil {
 				if errM == nil {
-					log.Debugf("[%d] ==== MOVIE START ==== \n", j)
-					log.Debugf("[%d] Movie. Title: '%s', Year: '%s', Filename: '%s'\n", j, movie.title, movie.year, movie.file.Name())
-					log.Debugf("[%d] Movie matched regexp: '%s'\n", j, movie.regexp)
+					log.Debugf("[%d] ==== MOVIE START ==== ", j)
+					log.Debugf("[%d] Movie. Title: '%s', Year: '%s', Filename: '%s'", j, movie.title, movie.year, movie.file.Name())
+					log.Debugf("[%d] Movie matched regexp: '%s'", j, movie.regexp)
 					mmatches = append(mmatches, file.Name())
 					srcf := path.Join(src, file.Name())
 					if confirm == true {
@@ -273,28 +272,28 @@ func Execute() {
 					if !verify {
 						var written int64
 						dstf := path.Join(mroot, file.Name())
-						log.Debugf("[%d] Dest is '%s' \n", j, dstf)
+						log.Debugf("[%d] Dest is '%s'", j, dstf)
 
 						// Start the copy
 						written, err = fileutils.Copy(srcf, path.Join(mroot, file.Name()), overwrite)
 						if err != nil {
-							log.Errorf("[%b] Can't copy '%s'. %s \n", j, file.Name(), err)
+							log.Errorf("[%b] Can't copy '%s'. %s", j, file.Name(), err)
 						}
 
 						totalWritten = totalWritten + written
 
 					}
 				}
-				log.Debugf("[%d] ==== MOVIE END ==== \n", j)
+				log.Debugf("[%d] ==== MOVIE END ====", j)
 			}
 
 			// Check for series
 			serie, errS := isSerie(file, spattern)
 			if serie != nil {
 				if errS == nil {
-					log.Debugf("[%d] ==== SERIE START ====\n", j)
-					log.Debugf("[%d] Serie. Title: '%s', Season: '%s', Episode: '%s', Filename: '%s'\n", j, serie.title, serie.season, serie.episode, serie.file.Name())
-					log.Debugf("[%d] Serie matched regexp: '%s'\n", j, serie.regexp)
+					log.Debugf("[%d] ==== SERIE START ====", j)
+					log.Debugf("[%d] Serie. Title: '%s', Season: '%s', Episode: '%s', Filename: '%s'", j, serie.title, serie.season, serie.episode, serie.file.Name())
+					log.Debugf("[%d] Serie matched regexp: '%s'", j, serie.regexp)
 					var written int64
 					smatches = append(smatches, file.Name())
 					if confirm == true {
@@ -308,22 +307,22 @@ func Execute() {
 						// Stat source so that we can perserve permissions when creating the directories if necessary
 						s, err := os.Stat(path.Dir(srcf))
 						if err != nil {
-							log.Errorf("[%d] Couldn't stat. '%s' \n", j, err)
+							log.Errorf("[%d] Couldn't stat. '%s'", j, err)
 						}
 
 						// Create serie folder and season folders resursively
 						dstFolder := path.Join(sroot, serie.title, "Season "+serie.season)
 						if !exists(dstFolder) {
-							log.Debugf("[%s] Dest does not exist, creating '%s' \n", j, dstFolder)
+							log.Debugf("[%s] Dest does not exist, creating '%s'", j, dstFolder)
 							err = os.MkdirAll(dstFolder, s.Mode())
 							if err != nil {
-								log.Errorf("[%d] Couldn't create '%s'. %s \n", j, dstFolder, err)
+								log.Errorf("[%d] Couldn't create '%s'. %s", j, dstFolder, err)
 							}
 						}
 
 						// Start copying
 						dstf := path.Join(dstFolder, file.Name())
-						log.Debugf("[%d] Dest is '%s' \n", j, dstf)
+						log.Debugf("[%d] Dest is '%s'", j, dstf)
 						written, err = fileutils.Copy(srcf, dstf, overwrite)
 						if err != nil {
 							log.Errorf("[%d] Can't copy '%s'. %s", j, file.Name(), err)
@@ -333,14 +332,14 @@ func Execute() {
 
 					}	
 				}
-				log.Debugf("[%d] ==== SERIE END ==== \n", j)
+				log.Debugf("[%d] ==== SERIE END ====", j)
 			}
 			index++
 		}
 	}
 
-	fmt.Println("Movies matched:", len(mmatches))
-	fmt.Println("Series matched:", len(smatches))
-	fmt.Printf("Copied %.2f%s\n", convertFileSize(totalWritten, unit), unit)
+	log.Println("Movies matched:", len(mmatches))
+	log.Println("Series matched:", len(smatches))
+	log.Printf("Copied %.2f%s\n", convertFileSize(totalWritten, unit), unit)
 
 }
