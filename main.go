@@ -28,8 +28,10 @@ type Session struct {
 	overwrite *bool
 	confirm	*bool
 	debug *bool	
+	quiet *bool
 	version string
 	written int64
+	logger *loglevel.Logger
 }
 
 type Movie struct {
@@ -71,9 +73,11 @@ type Serie struct {
 
 		// Create progress bar and init some defaults
 		s.bar = initBar(src, dirSize)
-
+		
 		// Start progress bar and start copying
-		s.bar.Start()
+		if !*s.quiet {
+			s.bar.Start()
+		}
 		written, err = s.copyDir(src, dst)
 		
 	}
@@ -83,15 +87,19 @@ type Serie struct {
 
 		// Create progress bar and init some defaults
 		s.bar = initBar(src, stat.Size())
-
+		
 		// Start progress bar and start  copying
-		s.bar.Start()
+		if !*s.quiet {
+			s.bar.Start()
+		}
 		written, err = s.copyFile(src, dst)
 		
 	}
 
-	s.bar.Finish()
-	s.written += written
+	if !*s.quiet {
+		s.bar.Finish()
+		s.written += written
+	}
 
 	return written, err
 
@@ -304,11 +312,11 @@ func convertUnit(bytes int64) string {
 	}
 	// Convert to gb
 	if bytes >= (1024 * 1024 * 1024) {
-		result = fmt.Sprintf("%d %s", ((bytes / 1024) / 1024) / 1024, "GB")
+		result = fmt.Sprintf("%.1f %s", ((float64(bytes) / 1024) / 1024) / 1024, "GB")
 	}
 	// Convert to tb
 	if bytes >= (1024 * 1024 * 1024 * 1024) {
-		result = fmt.Sprintf("%d %s", (((bytes / 1024) / 1024) / 1024) / 1024, "TB")
+		result = fmt.Sprintf("%.2f %s", (((float64(bytes) / 1024) / 1024) / 1024) / 1024, "TB")
 	}
 
 	return result
@@ -408,6 +416,30 @@ func truncate(str string, length int) string {
 	return returnStr
 }
 
+
+func (s *Session) infof(format string, msg ...interface{}) {
+	if *s.quiet {
+		return
+	}
+	s.logger.Printf(format, msg...)
+}
+
+func (s *Session) debugf(format string, msg ...interface{}) {
+	if *s.quiet {
+		return
+	}
+	if *s.debug {
+		s.logger.Debugf(format, msg...)
+	}
+}
+
+func (s *Session) errorf(format string, msg ...interface{}) {
+	if *s.quiet {
+		return
+	}
+	s.logger.Errorf(format, msg...)	
+}
+
 func main() {
 	
 	// Read arguments
@@ -415,6 +447,8 @@ func main() {
 		overwrite: flag.Bool("o", false, "Overwrite existing files/folders when copying"),
 		confirm: flag.Bool("c", false, "Prompt for confirm before overwriting existing files/folders"),
 		debug: flag.Bool("d", false, "Debug mode"),
+		quiet: flag.Bool("q", false, "Supress all output"),
+		logger: loglevel.New(),
 		version: "1.0.2",
 	}
 
@@ -429,37 +463,32 @@ func main() {
 	}
 
 	// Setup logging
-	log := loglevel.New()
-	if *session.debug {
-		log.SetLevel(3)
-	}
-	log.PrintTime = true
-	
+	session.logger.SetLevel(3)
 
 	// Check command line arguments
 	if len(os.Args) < 3 {
-		log.Error("Missing arguments")
+		session.errorf("Not enough arguments")
 	}
 
 	// Set up source and destination directories
 	source := os.Args[len(os.Args)-2]
 	if !exists(source) {
-		log.Errorf("Does not exist '%s'", source)
+		session.errorf("Does not exist '%s'", source)
 	}
 	destination := os.Args[len(os.Args)-1]
 	if !exists(destination) {
-		log.Errorf("Does not exist '%s'", destination)
+		session.errorf("Does not exist '%s'", destination)
 	}
 	// Check if movies root is a directory
 	if isFile(source) {
-		log.Errorf("Is not a directory '%s'", source)
+		session.errorf("Is not a directory '%s'", source)
 	}
 	// Check if series root is a directory
 	if isFile(destination) {
-		log.Errorf("Is not a directory '%s'", destination)
+		session.errorf("Is not a directory '%s'", destination)
 	}
 
-	log.Debugf("Overwrite is set to '%t'", session.overwrite)
+	session.debugf("Overwrite is set to '%t'", *session.overwrite)
 
 	files, err := ioutil.ReadDir(source)
 	if err != nil {
@@ -469,7 +498,7 @@ func main() {
 	index := 0
 
 	for j, file := range files {
-		log.Debugf("Checking '%s'", file.Name())
+		session.debugf("Checking '%s'", file.Name())
 
 		// Check for movies
 		movie, err := isMovie(file)
@@ -477,9 +506,9 @@ func main() {
 			panic(err)
 		}
 		if movie != nil {
-			log.Debugf("[%d] ==== MOVIE START ==== ", j)
-			log.Debugf("[%d] Movie. Title: '%s', Year: '%s', Filename: '%s'", j, movie.title, movie.year, movie.file.Name())
-			log.Debugf("[%d] Movie matched regexp: '%s'", j, movie.regexp)
+			session.debugf("[%d] ==== MOVIE START ==== ", j)
+			session.debugf("[%d] Movie. Title: '%s', Year: '%s', Filename: '%s'", j, movie.title, movie.year, movie.file.Name())
+			session.debugf("[%d] Movie matched regexp: '%s'", j, movie.regexp)
 			
 			sourcef := path.Join(source, file.Name())
 			
@@ -498,14 +527,14 @@ func main() {
 				err = os.MkdirAll(dstFolder, s.Mode())	
 			}
 
-			log.Debugf("[%d] Destination folder is '%s'", j, dstFolder)
+			session.debugf("[%d] Destination folder is '%s'", j, dstFolder)
 
 			// Start the copy
 			_, err = session.copy(sourcef, path.Join(dstFolder, file.Name()))
 			if err != nil {
-				log.Errorf("[%b] Can't copy '%s'. %s", j, file.Name(), err)
+				session.errorf("[%b] Can't copy '%s'. %s", j, file.Name(), err)
 			}
-			log.Debugf("[%d] ==== MOVIE END ====", j)
+			session.debugf("[%d] ==== MOVIE END ====", j)
 		}
 
 		// Check for series
@@ -514,9 +543,9 @@ func main() {
 			panic(err)
 		}
 		if serie != nil {
-			log.Debugf("[%d] ==== SERIE START ====", j)
-			log.Debugf("[%d] Serie. Title: '%s', Season: '%s', Episode: '%s', Filename: '%s'", j, serie.title, serie.season, serie.episode, serie.file.Name())
-			log.Debugf("[%d] Serie matched regexp: '%s'", j, serie.regexp)
+			session.debugf("[%d] ==== SERIE START ====", j)
+			session.debugf("[%d] Serie. Title: '%s', Season: '%s', Episode: '%s', Filename: '%s'", j, serie.title, serie.season, serie.episode, serie.file.Name())
+			session.debugf("[%d] Serie matched regexp: '%s'", j, serie.regexp)
 			
 			sourcef := path.Join(source, file.Name())
 
@@ -527,32 +556,32 @@ func main() {
 			// Stat source so that we can perserve permissions when creating the directories if necessary
 			s, err := os.Stat(path.Dir(sourcef))
 			if err != nil {
-				log.Errorf("[%d] Couldn't stat. '%s'", j, err)
+				session.errorf("[%d] Couldn't stat. '%s'", j, err)
 			}
 
 			// Create serie folder and season folders resursively
 			dstFolder := path.Join(destination, "Series", serie.title, "Season "+serie.season)
 			if !exists(dstFolder) {
-				log.Debugf("[%s] Dest does not exist, creating '%s'", j, dstFolder)
+				session.debugf("[%s] Dest does not exist, creating '%s'", j, dstFolder)
 				err = os.MkdirAll(dstFolder, s.Mode())
 				if err != nil {
-					log.Errorf("[%d] Couldn't create '%s'. %s", j, dstFolder, err)
+					session.debugf("[%d] Couldn't create '%s'. %s", j, dstFolder, err)
 				}
 			}
 
 			// Start copying
 			dstf := path.Join(dstFolder, file.Name())
-			log.Debugf("[%d] Dest is '%s'", j, dstf)
+			session.debugf("[%d] Dest is '%s'", j, dstf)
 			_, err = session.copy(sourcef, dstf)
 			if err != nil {
-				log.Errorf("[%d] Can't copy '%s'. %s", j, file.Name(), err)
+				session.errorf("[%d] Can't copy '%s'. %s", j, file.Name(), err)
 			}
 
-			log.Debugf("[%d] ==== SERIE END ====", j)
+			session.debugf("[%d] ==== SERIE END ====", j)
 		}
 		index++
 	}
 	
-	log.Printf("Copied %s\n", convertUnit(session.written))
+	session.infof("Copied %s\n", convertUnit(session.written))
 
 }

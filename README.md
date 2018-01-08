@@ -16,6 +16,7 @@ options:
   -c    Prompt for confirm before overwriting existing files/folders
   -d    Debug mode
   -o    Overwrite existing files/folders when copying
+  -q    Supress all output
   -v    Print version info
 ```
 
@@ -33,7 +34,7 @@ Typicall.TV-show.S01E01
 Some.Sitcom.S02E01
 ```
 
-The following command will copy all movies, wether it's a file or a folder, and overwrite existing ones to `~/Media/Movies/` and `~/Media/Series/`. Note that the folders `Movies` and `Series` will be created automatically in `/Volumes/USBDrive` if they don't already exist.
+The following command will copy all movies, wether it's a file or a folder, and overwrite existing ones to `/Volumes/USBDrive/Movies` and `/Volumes/USBDrive/Series`. Note that the folders `Movies` and `Series` will be created automatically in `/Volumes/USBDrive` if they don't already exist.
 ```
 $ lazycopy ~/Downloads /Volumes/USBDrive
 ```
@@ -46,6 +47,6 @@ The destination directory will look like this when the copy operation finishes
 /Volumes/USBDrive/Movies/Some.Movie.1977.mkv
 /Volumes/USBDrive/Movies/Ultra.Hi.Resolution.Film.2016.Blu-Ray.avi
 /Volumes/USBDrive/Movies/Movie.Directory.Split.In.Two.CDS.1998
-/Volumes/USBDrive/Tv-Shows/Typicall TV-Show/Season 01/Typicall.TV-show.S01E01
-/Volumes/USBDrive/Tv-Shows/Some Sitcom/Season 02/Some.Sitcom.S02E01
+/Volumes/USBDrive/Series/Typicall TV-Show/Season 01/Typicall.TV-show.S01E01
+/Volumes/USBDrive/Series/Some Sitcom/Season 02/Some.Sitcom.S02E01
 ```
