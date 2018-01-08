@@ -1,8 +1,6 @@
 # lazycopy
 A utility that copies movies and tv-shows from source, usually a download directory, to a target directory. Scans the source directory for video content and organizes them at a target directory. It will automatically detect movies and tv-shows based on their file name using complex regular expressions. When matching media is found, the file or folder is copied to the target diretory, preserving permissions and creating any sub-folders if needed.
 
-<iframe src='https://gfycat.com/ifr/FilthyImpossibleBluefintuna' frameborder='0' scrolling='no' width='640' height='366' allowfullscreen></iframe>
-
 ## Installation
 
 ### From source
