@@ -5,54 +5,57 @@ package main
 * Author: Amir Mofasser <amir.mofasser@gmail.com>
 *	https://github.com/amimof
 *
-*/
+ */
 
 import (
-	"os"
-	"io"
-	"io/ioutil"
-	"regexp"
-	"flag"
-	"path"
-  "path/filepath"
-	"strings"
 	"bufio"
-  "time"
+	"flag"
+	"fmt"
 	"github.com/amimof/loglevel-go"
 	"github.com/cheggaaa/pb"
-	"fmt"
+	"io"
+	"io/ioutil"
+	"os"
+	"path"
+	"path/filepath"
+	"regexp"
+	"strings"
+	"time"
 )
 
+var VERSION string
+var COMMIT string
+var BRANCH string
+
 type Session struct {
-	bar *pb.ProgressBar
+	bar       *pb.ProgressBar
 	overwrite *bool
-	confirm	*bool
-	debug *bool	
-	quiet *bool
-	version string
-	written int64
-	logger *loglevel.Logger
+	confirm   *bool
+	debug     *bool
+	quiet     *bool
+	written   int64
+	logger    *loglevel.Logger
 }
 
 type Movie struct {
-	title string
-	year string
+	title  string
+	year   string
 	regexp string
-	file os.FileInfo
+	file   os.FileInfo
 }
 
 type Serie struct {
-	title string
-	season string
+	title   string
+	season  string
 	episode string
-	regexp string
-	file os.FileInfo
+	regexp  string
+	file    os.FileInfo
 }
 
 /*
- * A wrapper method that will copy a single file or a an entire directory with it's content from src to dst. 
+ * A wrapper method that will copy a single file or a an entire directory with it's content from src to dst.
  */
- func (s *Session) copy(src, dst string) (int64, error) {
+func (s *Session) copy(src, dst string) (int64, error) {
 
 	var written int64
 
@@ -73,13 +76,13 @@ type Serie struct {
 
 		// Create progress bar and init some defaults
 		s.bar = initBar(src, dirSize)
-		
+
 		// Start progress bar and start copying
 		if !*s.quiet {
 			s.bar.Start()
 		}
 		written, err = s.copyDir(src, dst)
-		
+
 	}
 
 	// Check if src is a file
@@ -87,13 +90,13 @@ type Serie struct {
 
 		// Create progress bar and init some defaults
 		s.bar = initBar(src, stat.Size())
-		
+
 		// Start progress bar and start  copying
 		if !*s.quiet {
 			s.bar.Start()
 		}
 		written, err = s.copyFile(src, dst)
-		
+
 	}
 
 	if !*s.quiet {
@@ -107,7 +110,7 @@ type Serie struct {
 
 /*
  * Copies a dir tree from src to dst.
- */ 
+ */
 func (s *Session) copyDir(src, dst string) (int64, error) {
 
 	var written int64
@@ -127,7 +130,7 @@ func (s *Session) copyDir(src, dst string) (int64, error) {
 	d, err := os.Open(dst)
 	if err != nil {
 		if !os.IsNotExist(err) && *s.overwrite == false {
-			return 0, err	
+			return 0, err
 		}
 	}
 	defer d.Close()
@@ -171,7 +174,7 @@ func (s *Session) copyDir(src, dst string) (int64, error) {
 
 /*
  * Copies a file from srcpath to dstpath
- */ 
+ */
 func (s *Session) copyFile(srcpath, dstpath string) (int64, error) {
 
 	// Create source
@@ -185,7 +188,7 @@ func (s *Session) copyFile(srcpath, dstpath string) (int64, error) {
 	d, err := os.Open(dstpath)
 	if !os.IsNotExist(err) {
 		if *s.overwrite == false {
-		  return 0, err
+			return 0, err
 		}
 	}
 	defer d.Close()
@@ -233,7 +236,6 @@ func isFile(path string) bool {
 	return false
 }
 
-
 /*
  * Checks wether a given filename is a movie based on regexp patterns
  */
@@ -245,10 +247,10 @@ func isMovie(file os.FileInfo) (*Movie, error) {
 		"(.*?)(\\d{3,4}p)(.*)",
 	}
 	extensions := "\\.(mkv|MKV|mp4|MP4|m4p|M4P|m4v|M4V|mpg|MPG|mpeg|MPEG|mp2|MP2|mpe|MPE|mpv|MPV|3gp|3GP|nsv|NSV|f4v|F4V|f4p|F4P|f4a|F4A|f4b|F4P|vob|VOB|avi|AVI|mov|MOV|wmv|WMV|asd|ASD|flv|FLV|ogv|OGV|ogg|OGG|qt|QT|yuv|YUV|rm|RM|rmvb|RMVB)"
-	
+
 	for _, element := range patterns {
 		if !file.IsDir() {
-			element = element+extensions
+			element = element + extensions
 		}
 		r, err := regexp.Compile(element)
 		if err == nil {
@@ -278,7 +280,7 @@ func isSerie(file os.FileInfo) (*Serie, error) {
 
 	for _, element := range patterns {
 		if !file.IsDir() {
-			element = element+extensions
+			element = element + extensions
 		}
 		r, err := regexp.Compile(element)
 		if err == nil {
@@ -286,7 +288,7 @@ func isSerie(file os.FileInfo) (*Serie, error) {
 			if match {
 				result := r.FindStringSubmatch(file.Name())
 				serie := &Serie{strings.Replace(strings.Trim(strings.Trim(result[1], "."), " "), ".", " ", -1), strings.Trim(result[2], "."), strings.Trim(result[3], "."), element, file}
-				return serie, nil				
+				return serie, nil
 			}
 		} else {
 			return nil, err
@@ -296,7 +298,7 @@ func isSerie(file os.FileInfo) (*Serie, error) {
 }
 
 /*
- * Converts bytes to a more human readable format. 
+ * Converts bytes to a more human readable format.
  * For example 104857600 bytes is converted to '100 MB'
  */
 func convertUnit(bytes int64) string {
@@ -304,27 +306,27 @@ func convertUnit(bytes int64) string {
 
 	// Convert to kb
 	if bytes >= 1024 {
-		result = fmt.Sprintf("%d %s", bytes / 1024, "kB")
+		result = fmt.Sprintf("%d %s", bytes/1024, "kB")
 	}
 	// Convert to mb
 	if bytes >= (1024 * 1024) {
-		result = fmt.Sprintf("%d %s", (bytes / 1024) / 1024, "MB")
+		result = fmt.Sprintf("%d %s", (bytes/1024)/1024, "MB")
 	}
 	// Convert to gb
 	if bytes >= (1024 * 1024 * 1024) {
-		result = fmt.Sprintf("%.1f %s", ((float64(bytes) / 1024) / 1024) / 1024, "GB")
+		result = fmt.Sprintf("%.1f %s", ((float64(bytes)/1024)/1024)/1024, "GB")
 	}
 	// Convert to tb
 	if bytes >= (1024 * 1024 * 1024 * 1024) {
-		result = fmt.Sprintf("%.2f %s", (((float64(bytes) / 1024) / 1024) / 1024) / 1024, "TB")
+		result = fmt.Sprintf("%.2f %s", (((float64(bytes)/1024)/1024)/1024)/1024, "TB")
 	}
 
 	return result
 }
 
 /*
- * Prompts the user for confirmation before continuing with any operation. The prompt message is 
- * provided as msg. 
+ * Prompts the user for confirmation before continuing with any operation. The prompt message is
+ * provided as msg.
  */
 func confirmCopy(msg string, def bool) bool {
 
@@ -337,10 +339,10 @@ func confirmCopy(msg string, def bool) bool {
 	fmt.Printf("%s (yes/no) [%s] ", msg, defaultChoice)
 
 	scanner := bufio.NewScanner(os.Stdin)
-	ok := scanner .Scan()
+	ok := scanner.Scan()
 
 	if ok {
-		
+
 		response = strings.ToLower(strings.Trim(scanner.Text(), " "))
 
 		if response == "y" || response == "yes" {
@@ -359,22 +361,20 @@ func confirmCopy(msg string, def bool) bool {
 	return false
 }
 
-
-
 /*
  * Setup an instance of ProgressBar and apply some customization to it.
  */
 func initBar(src string, size int64) *pb.ProgressBar {
 	bar := pb.New64(size)
 	bar.SetUnits(pb.U_BYTES)
-	bar.SetRefreshRate(time.Millisecond*10)
-	bar.Prefix(truncate(path.Base(src), 40)+": ")	
+	bar.SetRefreshRate(time.Millisecond * 10)
+	bar.Prefix(truncate(path.Base(src), 30) + ": ")
 	bar.Format("[-> ]")
-	bar.ShowSpeed =  true
+	bar.ShowSpeed = true
 	return bar
 }
 
-/* 
+/*
  * Calculate total size of a directory
  */
 func calculateSize(src string) (int64, error) {
@@ -392,7 +392,7 @@ func calculateSize(src string) (int64, error) {
  * Truncates a string to the length specified by len.
  */
 func truncate(str string, length int) string {
-	
+
 	var cut int
 	var newStr string
 
@@ -406,16 +406,15 @@ func truncate(str string, length int) string {
 	}
 
 	newStr = str[:cut]
-  returnStr := newStr + "..." + str[(strLen-3):strLen]
+	returnStr := newStr + "..." + str[(strLen-3):strLen]
 
-  // If the new string is longer than the originial, the just return the originial string
-  if returnStr >= str {
-    returnStr = str
-  }
+	// If the new string is longer than the originial, the just return the originial string
+	if returnStr >= str {
+		returnStr = str
+	}
 
 	return returnStr
 }
-
 
 func (s *Session) infof(format string, msg ...interface{}) {
 	if *s.quiet {
@@ -437,19 +436,18 @@ func (s *Session) errorf(format string, msg ...interface{}) {
 	if *s.quiet {
 		return
 	}
-	s.logger.Errorf(format, msg...)	
+	s.logger.Errorf(format, msg...)
 }
 
 func main() {
-	
+
 	// Read arguments
 	session := &Session{
 		overwrite: flag.Bool("o", false, "Overwrite existing files/folders when copying"),
-		confirm: flag.Bool("c", false, "Prompt for confirm before overwriting existing files/folders"),
-		debug: flag.Bool("d", false, "Debug mode"),
-		quiet: flag.Bool("q", false, "Supress all output"),
-		logger: loglevel.New(),
-		version: "1.0.2",
+		confirm:   flag.Bool("c", false, "Prompt for confirm before overwriting existing files/folders"),
+		debug:     flag.Bool("d", false, "Debug mode"),
+		quiet:     flag.Bool("q", false, "Supress all output"),
+		logger:    loglevel.New(),
 	}
 
 	printVer := flag.Bool("v", false, "Print version info")
@@ -458,7 +456,7 @@ func main() {
 
 	// Print version info and exit
 	if *printVer {
-		fmt.Println(session.version)
+		fmt.Printf("Version %s\nBranch: %s\nCommit %s\n", VERSION, BRANCH, COMMIT)
 		os.Exit(0)
 	}
 
@@ -509,9 +507,9 @@ func main() {
 			session.debugf("[%d] ==== MOVIE START ==== ", j)
 			session.debugf("[%d] Movie. Title: '%s', Year: '%s', Filename: '%s'", j, movie.title, movie.year, movie.file.Name())
 			session.debugf("[%d] Movie matched regexp: '%s'", j, movie.regexp)
-			
+
 			sourcef := path.Join(source, file.Name())
-			
+
 			if *session.confirm == true {
 				*session.overwrite = confirmCopy("Overwrite '"+file.Name()+"'?", true)
 			}
@@ -524,7 +522,7 @@ func main() {
 				panic(err)
 			}
 			if !exists(dstFolder) {
-				err = os.MkdirAll(dstFolder, s.Mode())	
+				err = os.MkdirAll(dstFolder, s.Mode())
 			}
 
 			session.debugf("[%d] Destination folder is '%s'", j, dstFolder)
@@ -546,7 +544,7 @@ func main() {
 			session.debugf("[%d] ==== SERIE START ====", j)
 			session.debugf("[%d] Serie. Title: '%s', Season: '%s', Episode: '%s', Filename: '%s'", j, serie.title, serie.season, serie.episode, serie.file.Name())
 			session.debugf("[%d] Serie matched regexp: '%s'", j, serie.regexp)
-			
+
 			sourcef := path.Join(source, file.Name())
 
 			if *session.confirm == true {
@@ -581,7 +579,7 @@ func main() {
 		}
 		index++
 	}
-	
+
 	session.infof("Copied %s\n", convertUnit(session.written))
 
 }

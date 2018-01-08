@@ -3,35 +3,19 @@
 # https://vic.demuzere.be/articles/golang-makefile-crosscompile/
 
 BINARY = lazycopy
-VET_REPORT = vet.report
-TEST_REPORT = tests.xml
 GOARCH = amd64
 
-VERSION?=?
+VERSION=1.0.2
 COMMIT=$(shell git rev-parse HEAD)
 BRANCH=$(shell git rev-parse --abbrev-ref HEAD)
-
-# Symlink into GOPATH
 GITHUB_USERNAME=amimof
 BUILD_DIR=${GOPATH}/src/github.com/${GITHUB_USERNAME}/${BINARY}
-CURRENT_DIR=$(shell pwd)
-BUILD_DIR_LINK=$(shell readlink ${BUILD_DIR})
 
 # Setup the -ldflags option for go build here, interpolate the variable values
 LDFLAGS = -ldflags "-X main.VERSION=${VERSION} -X main.COMMIT=${COMMIT} -X main.BRANCH=${BRANCH}"
 
 # Build the project
-all: link clean test vet linux darwin windows
-
-link:
-	BUILD_DIR=${BUILD_DIR}; \
-	BUILD_DIR_LINK=${BUILD_DIR_LINK}; \
-	CURRENT_DIR=${CURRENT_DIR}; \
-	if [ "$${BUILD_DIR_LINK}" != "$${CURRENT_DIR}" ]; then \
-	    echo "Fixing symlinks for build"; \
-	    rm -f $${BUILD_DIR}; \
-	    ln -s $${CURRENT_DIR} $${BUILD_DIR}; \
-	fi
+all: clean fmt linux darwin windows
 
 linux: 
 	cd ${BUILD_DIR}; \
@@ -49,14 +33,8 @@ windows:
 	cd - >/dev/null
 
 test:
-	if ! hash go2xunit 2>/dev/null; then go install github.com/tebeka/go2xunit; fi
 	cd ${BUILD_DIR}; \
-	godep go test -v ./... 2>&1 | go2xunit -output ${TEST_REPORT} ; \
-	cd - >/dev/null
-
-vet:
-	-cd ${BUILD_DIR}; \
-	godep go vet ./... > ${VET_REPORT} 2>&1 ; \
+	go test ; \
 	cd - >/dev/null
 
 fmt:
@@ -65,8 +43,6 @@ fmt:
 	cd - >/dev/null
 
 clean:
-	-rm -f ${TEST_REPORT}
-	-rm -f ${VET_REPORT}
 	-rm -f ${BINARY}-*
 
-.PHONY: link linux darwin windows test vet fmt clean
+.PHONY: linux darwin windows test fmt clean

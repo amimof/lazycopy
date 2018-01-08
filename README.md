@@ -1,12 +1,19 @@
 # lazycopy
 A utility that copies movies and tv-shows from source, usually a download directory, to a target directory. Scans the source directory for video content and organizes them at a target directory. It will automatically detect movies and tv-shows based on their file name using complex regular expressions. When matching media is found, the file or folder is copied to the target diretory, preserving permissions and creating any sub-folders if needed.
 
+![Jan-08-2018 15-59-39](https://gfycat.com/ifr/FilthyImpossibleBluefintuna)
+
 ## Installation
 
-With `Go` installed, run:
+### From source
 ```
-$ go get -u github.com/amimof/lazycopy
+$ git clone https://github.com/amimof/lazycopy.git
+$ cd lazycopy
+$ make
 ```
+
+### From built binaries
+Go to https://github.com/amimof/lazycopy/releases and download the binary for your target platform
 
 ## Usage
 ```
