@@ -1,28 +1,57 @@
 # lazycopy
-A utility written in Go that copies your movies and series from source to target directory.
-Scans a directory for video content and organizes them at a target directory. It is capable of
-detecting movies and series based on their file name.
+A utility that copies movies and tv-shows from source, usually a download directory, to a target directory. Scans the source directory for video content and organizes them at a target directory. It will automatically detect movies and tv-shows based on their file name using complex regular expressions. When matching media is found, the file or folder is copied to the target diretory, preserving permissions and creating any sub-folders if needed.
 
-# Usage
-Search the target (-t) directory ~/Downloads for media. Copies any movies (-m) to ~/Media/Movies and (-s) series to ~/Media/Series.
-Below example will overwrite any already existing files and folders (-o)
+## Installation
+
+### From source
 ```
-./lazy -m ~/Media/Movies -s ~/Media/Series -t ~/Downloads -o
+$ git clone https://github.com/amimof/lazycopy.git
+$ cd lazycopy
+$ make
 ```
 
-Other available command line options are
+### From built binaries
+Go to https://github.com/amimof/lazycopy/releases and download the binary for your target platform
+
+## Usage
 ```
-Usage of ./lazy:
-  -c    Prompt for confirm when overwriting existing files/folders
-  -m string
-        Directory to your movies. (default ".")
+$ lazycopy [options] <source dir> <target dir>
+
+options:
+  -c    Prompt for confirm before overwriting existing files/folders
+  -d    Debug mode
   -o    Overwrite existing files/folders when copying
-  -s string
-        Directory to your series. (default ".")
-  -t string
-        Target directory. Typically your Downloads folder. (default ".")
-  -u string
-        String representation of unit to use when calculating file sizes. Choices are k, m, g and t (default "g")
-  -v int
-        Log level. 3=DEBUG, 2=WARN, 1=INFO, 0=DEBUG. (default "0")
+  -q    Supress all output
+  -v    Print version info
+```
+
+## Example
+
+The download directory `~/Downloads/` contains following content:
+
+```
+.
+..
+Some.Movie.1977.mkv
+Ultra.Hi.Resolution.Film.2016.Blu-Ray.avi
+Movie.Directory.Split.In.Two.CDS.1998
+Typicall.TV-show.S01E01
+Some.Sitcom.S02E01
+```
+
+The following command will copy all movies, wether it's a file or a folder, and overwrite existing ones to `/Volumes/USBDrive/Movies` and `/Volumes/USBDrive/Series`. Note that the folders `Movies` and `Series` will be created automatically in `/Volumes/USBDrive` if they don't already exist.
+```
+$ lazycopy ~/Downloads /Volumes/USBDrive
+```
+
+
+The destination directory will look like this when the copy operation finishes
+```
+.
+..
+/Volumes/USBDrive/Movies/Some.Movie.1977.mkv
+/Volumes/USBDrive/Movies/Ultra.Hi.Resolution.Film.2016.Blu-Ray.avi
+/Volumes/USBDrive/Movies/Movie.Directory.Split.In.Two.CDS.1998
+/Volumes/USBDrive/Series/Typicall TV-Show/Season 01/Typicall.TV-show.S01E01
+/Volumes/USBDrive/Series/Some Sitcom/Season 02/Some.Sitcom.S02E01
 ```

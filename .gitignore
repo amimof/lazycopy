@@ -6,6 +6,9 @@
 # Folders
 _obj
 _test
+bin
+dest
+source
 
 # Architecture specific extensions/prefixes
 *.[568vq]
@@ -22,3 +25,6 @@ _testmain.go
 *.exe
 *.test
 *.prof
+
+lazycopy-darwin-amd64
+lazycopy-linux-amd64
