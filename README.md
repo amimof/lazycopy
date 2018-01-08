@@ -1,15 +1,21 @@
 # lazycopy
 A utility that copies movies and tv-shows from source, usually a download directory, to a target directory. Scans the source directory for video content and organizes them at a target directory. It will automatically detect movies and tv-shows based on their file name using complex regular expressions. When matching media is found, the file or folder is copied to the target diretory, preserving permissions and creating any sub-folders if needed.
 
+## Installation
+
+With `Go` installed, run:
+```
+$ go get -u github.com/amimof/lazycopy
+```
+
 ## Usage
 ```
 $ lazycopy [options] <source dir> <target dir>
 
 options:
-  -c    Confirm when overwriting existing files/folders
-  -l int
-        Log level. 3=DEBUG, 2=INFO, 1=WARN, 0=ERROR. (default "0") (default 1)
-  -o    Overwrite existing files/folders
+  -c    Prompt for confirm before overwriting existing files/folders
+  -d    Debug mode
+  -o    Overwrite existing files/folders when copying
   -v    Print version info
 ```
 

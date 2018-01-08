@@ -23,9 +23,14 @@ import (
 	"fmt"
 )
 
-var (
+type Session struct {
 	bar *pb.ProgressBar
-)
+	overwrite *bool
+	confirm	*bool
+	debug *bool	
+	version string
+	written int64
+}
 
 type Movie struct {
 	title string
@@ -42,10 +47,162 @@ type Serie struct {
 	file os.FileInfo
 }
 
-var extensions string = "\\.(mkv|MKV|mp4|MP4|m4p|M4P|m4v|M4V|mpg|MPG|mpeg|MPEG|mp2|MP2|mpe|MPE|mpv|MPV|3gp|3GP|nsv|NSV|f4v|F4V|f4p|F4P|f4a|F4A|f4b|F4P|vob|VOB|avi|AVI|mov|MOV|wmv|WMV|asd|ASD|flv|FLV|ogv|OGV|ogg|OGG|qt|QT|yuv|YUV|rm|RM|rmvb|RMVB)"
-var log *loglevel.Logger = loglevel.New()
+/*
+ * A wrapper method that will copy a single file or a an entire directory with it's content from src to dst. 
+ */
+ func (s *Session) copy(src, dst string) (int64, error) {
 
-// Returns true if path exists
+	var written int64
+
+	// Stat source
+	stat, err := os.Stat(src)
+	if err != nil {
+		return 0, err
+	}
+
+	// Check if src is a dir
+	if stat.IsDir() {
+
+		// Calculate total directory size before copying so that we can pass it to the progress bar
+		dirSize, err := calculateSize(src)
+		if err != nil {
+			return 0, err
+		}
+
+		// Create progress bar and init some defaults
+		s.bar = initBar(src, dirSize)
+
+		// Start progress bar and start copying
+		s.bar.Start()
+		written, err = s.copyDir(src, dst)
+		
+	}
+
+	// Check if src is a file
+	if !stat.IsDir() {
+
+		// Create progress bar and init some defaults
+		s.bar = initBar(src, stat.Size())
+
+		// Start progress bar and start  copying
+		s.bar.Start()
+		written, err = s.copyFile(src, dst)
+		
+	}
+
+	s.bar.Finish()
+	s.written += written
+
+	return written, err
+
+}
+
+/*
+ * Copies a dir tree from src to dst.
+ */ 
+func (s *Session) copyDir(src, dst string) (int64, error) {
+
+	var written int64
+
+	// Stat source
+	stat, err := os.Stat(src)
+	if err != nil {
+		return 0, err
+	}
+
+	// Ensure that src is a dir
+	if !stat.IsDir() {
+		return 0, err
+	}
+
+	// Ensure that dst does not already exist
+	d, err := os.Open(dst)
+	if err != nil {
+		if !os.IsNotExist(err) && *s.overwrite == false {
+			return 0, err	
+		}
+	}
+	defer d.Close()
+
+	// Create dest dir
+	err = os.MkdirAll(dst, stat.Mode())
+	if err != nil {
+		return 0, err
+	}
+
+	entries, err := ioutil.ReadDir(src)
+
+	if err != nil {
+		return 0, err
+	} else {
+
+		for _, entry := range entries {
+
+			sfp := path.Join(src, entry.Name())
+			dfp := path.Join(dst, entry.Name())
+
+			if entry.IsDir() {
+				w, err := s.copyDir(sfp, dfp)
+				if err != nil {
+					return 0, err
+				}
+				written += w
+			} else {
+				w, err := s.copyFile(sfp, dfp)
+				if err != nil {
+					return 0, err
+				}
+				written += w
+			}
+		}
+	}
+
+	return written, nil
+
+}
+
+/*
+ * Copies a file from srcpath to dstpath
+ */ 
+func (s *Session) copyFile(srcpath, dstpath string) (int64, error) {
+
+	// Create source
+	src, err := os.Open(srcpath)
+	if err != nil {
+		return 0, err
+	}
+	defer src.Close()
+
+	// Check if dst exists
+	d, err := os.Open(dstpath)
+	if !os.IsNotExist(err) {
+		if *s.overwrite == false {
+		  return 0, err
+		}
+	}
+	defer d.Close()
+
+	// Create dest
+	dest, err := os.Create(dstpath)
+	if err != nil {
+		return 0, err
+	}
+	defer dest.Close()
+
+	// Copy
+	writer := io.MultiWriter(dest, s.bar)
+	written, err := io.Copy(writer, src)
+
+	if err != nil {
+		return 0, err
+	}
+
+	return written, nil
+}
+
+/*
+ * Returns true if path exists
+ */
 func exists(path string) bool {
 	_, err := os.Stat(path)
 	if err == nil {
@@ -57,7 +214,9 @@ func exists(path string) bool {
 	return true
 }
 
-// Return true if path is a file
+/*
+ * Return true if path is a file
+ */
 func isFile(path string) bool {
 	file, err := os.Stat(path)
 	if err == nil && file.IsDir() != true {
@@ -67,16 +226,19 @@ func isFile(path string) bool {
 }
 
 
-// Checks wether a given filename is considered to be a movie or series
-// based on the specified regexp patterns
+/*
+ * Checks wether a given filename is a movie based on regexp patterns
+ */
 func isMovie(file os.FileInfo) (*Movie, error) {
-	var pattern []string = []string{"(.*?)\\((17[0-9][0-9]|180[0-9]|181[0-9]|18[2-9]\\d|19\\d\\d|2\\d{3}|30[0-3]\\d|304[0-8])\\)(.*)",
+	patterns := []string{"(.*?)\\((17[0-9][0-9]|180[0-9]|181[0-9]|18[2-9]\\d|19\\d\\d|2\\d{3}|30[0-3]\\d|304[0-8])\\)(.*)",
 		"(.*?)\\[(17[0-9][0-9]|180[0-9]|181[0-9]|18[2-9]\\d|19\\d\\d|2\\d{3}|30[0-3]\\d|304[0-8])\\](.*)",
 		"(.*?)\\{(17[0-9][0-9]|180[0-9]|181[0-9]|18[2-9]\\d|19\\d\\d|2\\d{3}|30[0-3]\\d|304[0-8])\\}(.*)",
 		"(.*?)(17[0-9][0-9]|180[0-9]|181[0-9]|18[2-9]\\d|19\\d\\d|2\\d{3}|30[0-3]\\d|304[0-8])(.*)",
 		"(.*?)(\\d{3,4}p)(.*)",
 	}
-	for _, element := range pattern {
+	extensions := "\\.(mkv|MKV|mp4|MP4|m4p|M4P|m4v|M4V|mpg|MPG|mpeg|MPEG|mp2|MP2|mpe|MPE|mpv|MPV|3gp|3GP|nsv|NSV|f4v|F4V|f4p|F4P|f4a|F4A|f4b|F4P|vob|VOB|avi|AVI|mov|MOV|wmv|WMV|asd|ASD|flv|FLV|ogv|OGV|ogg|OGG|qt|QT|yuv|YUV|rm|RM|rmvb|RMVB)"
+	
+	for _, element := range patterns {
 		if !file.IsDir() {
 			element = element+extensions
 		}
@@ -95,15 +257,18 @@ func isMovie(file os.FileInfo) (*Movie, error) {
 	return nil, nil
 }
 
-// Checks wether a given filename is considered to be a movie or series
-// based on the specified regexp patterns
+/*
+ * Checks wether a given filename is a series based on regexp patterns
+ */
 func isSerie(file os.FileInfo) (*Serie, error) {
-	var pattern []string = []string{"(.*?)S(\\d{1,2})E(\\d{2})(.*)",
+	patterns := []string{"(.*?)S(\\d{1,2})E(\\d{2})(.*)",
 		"(.*?)s(\\d{1,2})e(\\d{2})(.*)",
 		"(.*?)\\[?(\\d{1,2})x(\\d{2})\\]?(.*)",
 		"(.*?)Season.?(\\d{1,2}).*?Episode.?(\\d{1,2})(.*)",
 	}
-	for _, element := range pattern {
+	extensions := "\\.(mkv|MKV|mp4|MP4|m4p|M4P|m4v|M4V|mpg|MPG|mpeg|MPEG|mp2|MP2|mpe|MPE|mpv|MPV|3gp|3GP|nsv|NSV|f4v|F4V|f4p|F4P|f4a|F4A|f4b|F4P|vob|VOB|avi|AVI|mov|MOV|wmv|WMV|asd|ASD|flv|FLV|ogv|OGV|ogg|OGG|qt|QT|yuv|YUV|rm|RM|rmvb|RMVB)"
+
+	for _, element := range patterns {
 		if !file.IsDir() {
 			element = element+extensions
 		}
@@ -122,32 +287,37 @@ func isSerie(file os.FileInfo) (*Serie, error) {
 	return nil, nil
 }
 
-// Converts file size from bytes to kb, mb, gb or tb
-func convertUnit(size int64) string {
-	result := fmt.Sprintf("%d %s", size, "bytes")
+/*
+ * Converts bytes to a more human readable format. 
+ * For example 104857600 bytes is converted to '100 MB'
+ */
+func convertUnit(bytes int64) string {
+	result := fmt.Sprintf("%d %s", bytes, "bytes")
 
 	// Convert to kb
-	if size >= 1024 {
-		result = fmt.Sprintf("%d %s", size / 1024, "kB")
+	if bytes >= 1024 {
+		result = fmt.Sprintf("%d %s", bytes / 1024, "kB")
 	}
 	// Convert to mb
-	if size >= (1024 * 1024) {
-		result = fmt.Sprintf("%d %s", (size / 1024) / 1024, "MB")
+	if bytes >= (1024 * 1024) {
+		result = fmt.Sprintf("%d %s", (bytes / 1024) / 1024, "MB")
 	}
 	// Convert to gb
-	if size >= (1024 * 1024 * 1024) {
-		result = fmt.Sprintf("%d %s", ((size / 1024) / 1024) / 1024, "GB")
+	if bytes >= (1024 * 1024 * 1024) {
+		result = fmt.Sprintf("%d %s", ((bytes / 1024) / 1024) / 1024, "GB")
 	}
 	// Convert to tb
-	if size >= (1024 * 1024 * 1024 * 1024) {
-		result = fmt.Sprintf("%d %s", (((size / 1024) / 1024) / 1024) / 1024, "TB")
+	if bytes >= (1024 * 1024 * 1024 * 1024) {
+		result = fmt.Sprintf("%d %s", (((bytes / 1024) / 1024) / 1024) / 1024, "TB")
 	}
 
 	return result
 }
 
-// Prompts the user for comfirmation by askig a yes/no question. The question can be 
-// provided as msg. (yes/no) [default] will be appended to the msg. 
+/*
+ * Prompts the user for confirmation before continuing with any operation. The prompt message is 
+ * provided as msg. 
+ */
 func confirmCopy(msg string, def bool) bool {
 
 	var response string = ""
@@ -156,7 +326,7 @@ func confirmCopy(msg string, def bool) bool {
 	if def {
 		defaultChoice = "yes"
 	}
-	log.Printf("%s (yes/no) [%s] ", msg, defaultChoice)
+	fmt.Printf("%s (yes/no) [%s] ", msg, defaultChoice)
 
 	scanner := bufio.NewScanner(os.Stdin)
 	ok := scanner .Scan()
@@ -172,7 +342,7 @@ func confirmCopy(msg string, def bool) bool {
 		} else if response == "" && def {
 			return true
 		} else {
-			log.Println("Please type (y)es or (n)o.")
+			fmt.Println("Please type (y)es or (n)o.")
 			return confirmCopy(msg, def)
 		}
 
@@ -182,71 +352,23 @@ func confirmCopy(msg string, def bool) bool {
 }
 
 
+
 /*
- * Copies a single file or a an entire directory with it's content from src to dst. 
- * Will overwrite any file that already exists if 'ow' is set to true
- *
+ * Setup an instance of ProgressBar and apply some customization to it.
  */
-func copy(src, dst string, ow bool) (int64, error) {
-
-	// Stat source
-	s, err := os.Stat(src)
-	if err != nil {
-		return 0, err
-	}
-
-	var written int64
-	var bar *pb.ProgressBar
-
-	// Check if src is a dir
-	if s.IsDir() {
-
-		// Calculate total directory size before copying so that we can pass it to the progress bar
-		dirSize, err := calculateSize(src)
-		if err != nil {
-			return 0, err
-		}
-
-		// Create progress bar and init some defaults
-		bar = initBar(src, dirSize)
-
-		// Start progress bar and start copying
-		bar.Start()
-		written, err = copyDir(src, dst, ow)
-		
-	}
-
-	// Check if src is a file
-	if !s.IsDir() {
-
-		// Create progress bar and init some defaults
-		bar = initBar(src, s.Size())
-
-		// Start progress bar and start  copying
-		bar.Start()
-		written, err = copyFile(src, dst, ow)
-		
-	}
-
-	bar.Finish()
-
-	return written, err
-
-}
-
-// Customize the bar. This function is mainly so that we don't have to write the same code twise.
-// Don't like the fact that this function takes the argument src. Might need some work.
 func initBar(src string, size int64) *pb.ProgressBar {
-	bar = pb.New64(size)
+	bar := pb.New64(size)
 	bar.SetUnits(pb.U_BYTES)
 	bar.SetRefreshRate(time.Millisecond*10)
-	bar.Prefix(truncate(path.Base(src), 40, true)+": ")	
+	bar.Prefix(truncate(path.Base(src), 40)+": ")	
 	bar.Format("[-> ]")
 	bar.ShowSpeed =  true
 	return bar
 }
 
-// Calculate total size of a directory
+/* 
+ * Calculate total size of a directory
+ */
 func calculateSize(src string) (int64, error) {
 	var size int64
 	err := filepath.Walk(src, func(_ string, info os.FileInfo, err error) error {
@@ -258,114 +380,13 @@ func calculateSize(src string) (int64, error) {
 	return size, err
 }
 
-// Copies a dir tree from src to dst. Overwrites content if ow is true
-func copyDir(src, dst string, ow bool) (int64, error) {
-
-	var written int64
-
-	// Stat source
-	s, err := os.Stat(src)
-	if err != nil {
-		return 0, err
-	}
-
-	// Ensure that src is a dir
-	if !s.IsDir() {
-		return 0, err
-	}
-
-	// Ensure that dst does not already exist
-	d, err := os.Open(dst)
-	if err != nil {
-		if !os.IsNotExist(err) && ow == false {
-			return 0, err	
-		}
-	}
-	defer d.Close()
-
-	// Create dest dir
-	err = os.MkdirAll(dst, s.Mode())
-	if err != nil {
-		return 0, err
-	}
-
-	//var written int64
-	entries, err := ioutil.ReadDir(src)
-
-	if err != nil {
-		return 0, err
-	} else {
-
-		for _, entry := range entries {
-
-			sfp := path.Join(src, entry.Name())
-			dfp := path.Join(dst, entry.Name())
-
-			if entry.IsDir() {
-				w, err := copyDir(sfp, dfp, ow)
-				if err != nil {
-					return 0, err
-				}
-				written += w
-			} else {
-				w, err := copyFile(sfp, dfp, ow)
-				if err != nil {
-					return 0, err
-				}
-				written += w
-			}
-		}
-	}
-
-	return written, nil
-
-}
-
-// Copies the content of src file to dst. Overwrites dst file if ow os true
-func copyFile(src, dst string, ow bool) (int64, error) {
-
-	// Create source
-	s, err := os.Open(src)
-	if err != nil {
-		return 0, err
-	}
-	defer s.Close()
-
-	// Check if dst exists
-	d, err := os.Open(dst)
-	if !os.IsNotExist(err) {
-		if ow == false {
-		  return 0, err
-		}
-	}
-	defer d.Close()
-
-	// Create dest
-	dest, err := os.Create(dst)
-	if err != nil {
-		return 0, err
-	}
-	defer dest.Close()
-
-	// Copy
-	writer := io.MultiWriter(dest, bar)
-	written, err := io.Copy(writer, s)
-
-	if err != nil {
-		return 0, err
-	}
-
-	return written, nil
-}
-
-
-// Truncates string to the length specified with len.
-// if bo is true, then truncated text will be represented by . chars
-func truncate(str string, length int, bo bool) string {
+/*
+ * Truncates a string to the length specified by len.
+ */
+func truncate(str string, length int) string {
 	
 	var cut int
 	var newStr string
-	var appendStr string
 
 	// Dont cut more than the max number of chars in the string
 	// Will throw 'slice bounds out of range' otherwise
@@ -377,12 +398,7 @@ func truncate(str string, length int, bo bool) string {
 	}
 
 	newStr = str[:cut]
-
-	if bo == true {
-		appendStr = str[(strLen-3):strLen]
-	}
-
-  returnStr := newStr + "..." + appendStr
+  returnStr := newStr + "..." + str[(strLen-3):strLen]
 
   // If the new string is longer than the originial, the just return the originial string
   if returnStr >= str {
@@ -392,28 +408,33 @@ func truncate(str string, length int, bo bool) string {
 	return returnStr
 }
 
-// Main loop
 func main() {
-
+	
 	// Read arguments
-	overwrite := flag.Bool("o", false, "Overwrite existing files/folders when copying")
-	confirm := flag.Bool("c", false, "Prompt for confirm when overwriting existing files/folders")
-	level := flag.Int("l", 1, "Log level. 3=DEBUG, 2=INFO, 1=WARN, 0=ERROR. (default \"0\")")
-	version := flag.Bool("v", false, "Print version info")
+	session := &Session{
+		overwrite: flag.Bool("o", false, "Overwrite existing files/folders when copying"),
+		confirm: flag.Bool("c", false, "Prompt for confirm before overwriting existing files/folders"),
+		debug: flag.Bool("d", false, "Debug mode"),
+		version: "1.0.2",
+	}
+
+	printVer := flag.Bool("v", false, "Print version info")
 
 	flag.Parse()
 
 	// Print version info and exit
-	if *version {
-		fmt.Println("1.0.2")
+	if *printVer {
+		fmt.Println(session.version)
 		os.Exit(0)
 	}
 
-	// Sets the loglevel.
-	// First we need to read from args and convert it to an int
-	log.SetLevel(*level)
+	// Setup logging
+	log := loglevel.New()
+	if *session.debug {
+		log.SetLevel(3)
+	}
 	log.PrintTime = true
-	log.Debugf("Log level is '%d'", level)
+	
 
 	// Check command line arguments
 	if len(os.Args) < 3 {
@@ -438,9 +459,7 @@ func main() {
 		log.Errorf("Is not a directory '%s'", destination)
 	}
 
-	var totalWritten int64
-
-	log.Debugf("Overwrite is set to '%t'", overwrite)
+	log.Debugf("Overwrite is set to '%t'", session.overwrite)
 
 	files, err := ioutil.ReadDir(source)
 	if err != nil {
@@ -464,11 +483,10 @@ func main() {
 			
 			sourcef := path.Join(source, file.Name())
 			
-			if *confirm == true {
-				*overwrite = confirmCopy("Overwrite '"+file.Name()+"'?", true)
+			if *session.confirm == true {
+				*session.overwrite = confirmCopy("Overwrite '"+file.Name()+"'?", true)
 			}
 
-			var written int64
 			dstFolder := path.Join(destination, "Movies")
 
 			// If "Movies" sub folder doesn't exists, then create it.
@@ -483,13 +501,10 @@ func main() {
 			log.Debugf("[%d] Destination folder is '%s'", j, dstFolder)
 
 			// Start the copy
-			written, err = copy(sourcef, path.Join(dstFolder, file.Name()), *overwrite)
+			_, err = session.copy(sourcef, path.Join(dstFolder, file.Name()))
 			if err != nil {
 				log.Errorf("[%b] Can't copy '%s'. %s", j, file.Name(), err)
 			}
-
-			totalWritten = totalWritten + written
-
 			log.Debugf("[%d] ==== MOVIE END ====", j)
 		}
 
@@ -503,13 +518,11 @@ func main() {
 			log.Debugf("[%d] Serie. Title: '%s', Season: '%s', Episode: '%s', Filename: '%s'", j, serie.title, serie.season, serie.episode, serie.file.Name())
 			log.Debugf("[%d] Serie matched regexp: '%s'", j, serie.regexp)
 			
-			var written int64
-			
-			if *confirm == true {
-				*overwrite = confirmCopy("Copy '"+file.Name()+"'?", true)
-			}
-
 			sourcef := path.Join(source, file.Name())
+
+			if *session.confirm == true {
+				*session.overwrite = confirmCopy("Copy '"+file.Name()+"'?", true)
+			}
 
 			// Stat source so that we can perserve permissions when creating the directories if necessary
 			s, err := os.Stat(path.Dir(sourcef))
@@ -518,7 +531,7 @@ func main() {
 			}
 
 			// Create serie folder and season folders resursively
-			dstFolder := path.Join(destination, serie.title, "Season "+serie.season)
+			dstFolder := path.Join(destination, "Series", serie.title, "Season "+serie.season)
 			if !exists(dstFolder) {
 				log.Debugf("[%s] Dest does not exist, creating '%s'", j, dstFolder)
 				err = os.MkdirAll(dstFolder, s.Mode())
@@ -530,18 +543,16 @@ func main() {
 			// Start copying
 			dstf := path.Join(dstFolder, file.Name())
 			log.Debugf("[%d] Dest is '%s'", j, dstf)
-			written, err = copy(source, dstf, *overwrite)
+			_, err = session.copy(sourcef, dstf)
 			if err != nil {
 				log.Errorf("[%d] Can't copy '%s'. %s", j, file.Name(), err)
 			}
-
-			totalWritten = totalWritten + written
 
 			log.Debugf("[%d] ==== SERIE END ====", j)
 		}
 		index++
 	}
 	
-	log.Printf("Copied %s\n", convertUnit(totalWritten))
+	log.Printf("Copied %s\n", convertUnit(session.written))
 
 }
