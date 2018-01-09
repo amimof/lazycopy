@@ -3,14 +3,29 @@ A utility that copies movies and tv-shows from source, usually a download direct
 
 ## Installation
 
-### From source
+### Installing from source
 ```
 $ git clone https://github.com/amimof/lazycopy.git
 $ cd lazycopy
-$ make
+```
+Linux 
+```
+$ make linux
+```
+OSX
+```
+$ make darwin
+```
+Raspberry Pi
+```
+$ make arm
+```
+Windows
+```
+$ make windows
 ```
 
-### From built binaries
+### Binary installation
 Go to https://github.com/amimof/lazycopy/releases and download the binary for your target platform
 
 ## Usage
